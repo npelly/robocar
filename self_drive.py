@@ -9,12 +9,12 @@ import timer
 import motor
 import car_model
 import camera
-import perception
+import perceptor
 
 def main(args):
     cancel = False
     cam = camera.get_camera()
-    per = perception.get_perception(camera.CAMERA_RESOLUTION)
+    per = perceptor.get_perceptor(camera.CAMERA_RESOLUTION)
     car = car_model.get_car_model()
     moto = motor.get_motor(args)
 
@@ -51,13 +51,7 @@ def main(args):
             moto.process(instructions)
             moto_timer.exit()
 
-            #print
-            print camera.describe(image),
-            print perception.describe(observations)
-            if visible: print "%.4f" % cross_track_error,
-            else: print "-----",
-            print motor.describe(instructions)
-            #/print
+            print image, observations, instructions
 
     finally:
         cam.close()

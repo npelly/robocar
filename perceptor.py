@@ -7,14 +7,36 @@ import argparse
 
 import timer
 
-class Perception:
+class Observation:
+    def __init__(self, cross_track_error, visible, timestamp):
+        self.cross_track_error = cross_track_error
+        self.visible = visible
+        self.timestamp = timestamp
+
+    def __str__(self):
+        if not self.visible: return "-----"
+        return "%+.4f" % self.cross_track_error
+
+class Perceptor:
     def __init__(self, resolution):
         (self.X, self.Y) = resolution
         self.weights = self._create_weights(self.Y, self.X, 0.2)
 
-    def process(self, image):
+    def process(self, camera_image, show=False):
+        image = camera_image.image
     #    image = cv2.cvtColor(image, cv2.COLOR_YUV420p2RGB)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+
+        if show:
+            cv2.imshow('perception', image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        if show:
+            cv2.imshow('perception', image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
         lower_blue = numpy.array([90,150,50])
         upper_blue = numpy.array([130,255,255])
@@ -23,9 +45,14 @@ class Perception:
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        error = self._cross_track_error(image)
+        if show:
+            cv2.imshow('perception', image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
-        return error
+        error, visible = self._cross_track_error(image)
+
+        return Observation(error, visible, camera_image.timestamp)
 
     """
     distance_weight is the weight of pixels at y=0 compared to weight at y=Y
@@ -64,37 +91,24 @@ class Perception:
         #print target_sum
     #    print numpy.sum(target_region * WEIGHTS)
         pixel_error = numpy.sum(target_region * self.weights) / target_sum
-        print pixel_error
         return (pixel_error, True)
 
-def describe(observation):
-    (cross_track_error, visible) = observation
-    if not visible: return "-----"
-    return "%+.4f" % cross_track_error
+def get_perceptor(resolution):
+    return Perceptor(resolution)
 
-def get_perception(resolution):
-    return Perception(resolution)
-
-def testImage(filename):
-    image = cv2.imread(filename)  #BGR
-    print process(image, show=False)
-
-def testPi():
+def test():
     import camera
-    cam = camera.get_default_camera()
+    cam = camera.get_camera()
+    per = get_perceptor(camera.CAMERA_RESOLUTION)
+
     queue = cam.start()
-    for _ in xrange(30):
-        image = queue.get(block=True)
-        print image.shape
-        print process(image)
+    camera_image = queue.get()
     cam.close()
 
+    observation = per.process(camera_image, show=True)
+
+    print camera_image, observation
+
+
 if __name__ == "__main__":
-    if os.uname()[1] == "pi":
-        testPi()
-    else:
-        if len(sys.argv) != 2:
-            print "USAGE:"
-            print "    python processimage.py JPEG"
-            sys.exit()
-        testImage(sys.argv[1])
+    test()
