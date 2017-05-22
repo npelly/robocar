@@ -43,35 +43,6 @@ class Timer:
     def clear(self):
         self._stamps= []
 
-class HistogramTimer:
-    def __init__(self):
-        self.histogram = {}
-        self.count = 0
-        self.average = 0.0
-
-    def enter(self):
-        self.enter_time = time.time()
-
-    def exit(self):
-        delta = round(1000*(time.time() - self.enter_time))
-        self.average = (self.count * self.average + delta) / (self.count + 1)
-        self.count += 1
-
-        bin = int(delta / 5)
-        old = self.histogram.get(bin)
-        if old:
-            self.histogram[bin] = old + 1
-        else:
-            self.histogram[bin] = 1
-
-    def print_summary(self):
-        if self.count < 1:
-            print ""
-            return
-        if self.average == 0: self.average = 0.0000000001
-        print "avg %dms" % (self.average)
-        for bin, count in self.histogram.iteritems():
-            print "[%4dms,%4dms): %d" % (bin*5, bin*5+5, count)
 
 """
 Keep to a regular timing period.

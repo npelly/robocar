@@ -5,10 +5,8 @@ import numpy
 import Queue
 import threading
 import cv2
-if os.uname()[1] == "pi":
-    import picamera
-    import picamera.array
 
+import util
 import timer
 
 DEBUG = True
@@ -18,9 +16,10 @@ CAMERA_RESOLUTION = (160, 128)
 CAMERA_FRAMERATE = 30
 
 class CameraImage:
-    def __init__(self, image, timestamp):
+    def __init__(self, image, image_time, image_time_delta):
         self.image = image
-        self.timestamp = timestamp
+        self.image_time = image_time
+        self.image_time_delta = image_time_delta
 
     def __str__(self):
         (y, x, c) = self.image.shape
@@ -28,14 +27,16 @@ class CameraImage:
 
 class PiCamera:
     def __init__(self):
+        import picamera
+        import picamera.array
         self.cancel = False
 
-    def start(self):
+    def __enter__(self):
         self.queue = Queue.Queue(maxsize=1)
         threading.Thread(target=self._run).start()
         return self.queue
 
-    def close(self):
+    def __exit__(self, type, value, traceback):
         self.cancel = True
 
     def _run(self):
@@ -44,19 +45,28 @@ class PiCamera:
             camera.framerate = CAMERA_FRAMERATE
             camera.start_preview()
             time.sleep(2)
-            base_timestamp = time.time()
+
+            t = timer.Timer()
+            first_timestamp = -1.0
+            prev_timestamp = -1.0
 
             if self.cancel: return
 
-            t = timer.Timer()
             with picamera.array.PiRGBArray(camera) as rawCapture:
                 for _ in camera.capture_continuous(rawCapture, format='bgr', use_video_port=True):
-                    timestamp = time.time() - base_timestamp
-                    image = rawCapture.array
+                    timestamp = time.time()
                     if self.cancel: break
+
+                    if first_timestamp < 0:
+                        first_timestamp = timestamp
+                        prev_timestamp = timestamp
+
+                    image = rawCapture.array
                     if not self.queue.empty(): self.queue.get(block=False)  # clear queue
-                    self.queue.put(CameraImage(image, timestamp))
+                    self.queue.put(CameraImage(image, timestamp - first_timestamp, timestamp - prev_timestamp))
+
                     rawCapture.truncate(0);
+                    prev_timestamp = timestamp
                     t.stamp()
 
             print "Camera timing:"
@@ -66,19 +76,21 @@ class DummyCamera:
     def __init__(self):
         self.cancel = False
 
-    def start(self):
+    def __enter__(self):
         self.queue = Queue.Queue(maxsize=1)
         threading.Thread(target=self._run).start()
         return self.queue
 
-    def close(self):
+    def __exit__(self, type, value, traceback):
         self.cancel = True
 
     def _run(self,):
         (X, Y) = CAMERA_RESOLUTION
         t = timer.Timer()
         image = numpy.zeros((Y, X, 3), numpy.uint8)
-        base_timestamp = time.time()
+        first_timestamp = -1.0
+        prev_timestamp = -1.0
+
         while not self.cancel:
             time.sleep(1.0 / CAMERA_FRAMERATE)
             if self.cancel: break
@@ -89,16 +101,14 @@ class DummyCamera:
         t.print_summary()
 
 def get_camera():
-    if os.uname()[1] == "pi":
+    if util.isRaspberryPi():
         return PiCamera()
     else:
         return DummyCamera()
 
 def test():
-    camera = get_camera()
-    queue = camera.start()
-    camera_image = queue.get()
-    camera.close()
+    with get_camera() as camera_image_queue:
+        camera_image = camera_image_queue.get()
 
     print camera_image
     cv2.imshow('camera test', camera_image.image)

@@ -13,49 +13,49 @@ import perceptor
 
 def main(args):
     cancel = False
-    cam = camera.get_camera()
-    per = perceptor.get_perceptor(camera.CAMERA_RESOLUTION)
-    car = car_model.get_car_model()
-    moto = motor.get_motor(args)
+    with camera.get_camera() as camera_image_queue:
+        per = perceptor.get_perceptor(camera.CAMERA_RESOLUTION)
+        car = car_model.get_car_model()
+        moto = motor.get_motor(args)
 
-    camera_queue = cam.start()
+        camera_queue = cam.start()
 
-    per_timer = timer.HistogramTimer()
-    car_timer = timer.HistogramTimer()
-    moto_timer = timer.HistogramTimer()
+        per_timer = timer.HistogramTimer()
+        car_timer = timer.HistogramTimer()
+        moto_timer = timer.HistogramTimer()
 
-    print "ENTER to finish"
-    try:
-        while not check_stdin():
-            try:
-                image = camera_queue.get(block=True, timeout=0.2)
-            except Queue.Empty:
-                print "warning: delayed camera image"
-                continue
+        print "ENTER to finish"
+        try:
+            while not check_stdin():
+                try:
+                    image = camera_queue.get(block=True, timeout=0.2)
+                except Queue.Empty:
+                    print "warning: delayed camera image"
+                    continue
 
-            if check_stdin(): break
+                if check_stdin(): break
 
-            per_timer.enter()
-            observations = per.process(image)
-            per_timer.exit()
+                per_timer.enter()
+                observations = per.process(image)
+                per_timer.exit()
 
-            if check_stdin(): break
+                if check_stdin(): break
 
-            car_timer.enter()
-            instructions = car.process(observations)
-            car_timer.exit()
+                car_timer.enter()
+                instructions = car.process(observations)
+                car_timer.exit()
 
-            if check_stdin(): break
+                if check_stdin(): break
 
-            moto_timer.enter()
-            moto.process(instructions)
-            moto_timer.exit()
+                moto_timer.enter()
+                moto.process(instructions)
+                moto_timer.exit()
 
-            print image, observations, instructions
+                print image, observations, instructions
 
-    finally:
-        cam.close()
-        moto.close()
+                statistics.process(observations, instructions)
+
+            moto.close()
 
     print "Perception processing:",
     per_timer.print_summary()
