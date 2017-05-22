@@ -46,17 +46,20 @@ class HistogramTimer:
         self.count += 1
 
         bin = int(delta * 1000.0 / self.bin_size)
-        self.histogram[bin] += 1
-
+        try:
+            self.histogram[bin] += 1
+        except KeyError:
+            self.histogram[bin] = 1
 
     def summary(self, include_rate = False):
         """Return summary as string."""
         if self.count < 1:
-            return "(no events)"
-        result = "avg %dms" % round(self.average * 1000.0)
+            return "count=0"
+        result = "count=%d avg=%dms" % (self.count, round(self.average * 1000.0))
         if include_rate: result += "(rate=%d Hz)" % round(1.0 / self.average)
-        for bin, count in self.histogram.iteritems():
-            result += "\n[%4dms,%4dms): %d" % (bin * 5, bin * 5 + 5, count)
+        for bin, count in sorted(self.histogram.iteritems()):
+            result += "\n[%4dms,%4dms): %d" % \
+                    (bin * self.bin_size, (bin+1) * self.bin_size, count)
         return result
 
 class TimedLoop:
@@ -109,6 +112,6 @@ if __name__ == "__main__":
         with histogram_timer_1:
             timed_loop.sleep()
         with histogram_timer_2:
-            time.sleep(random.random() * 0.06)
+            time.sleep(random.random() * 0.05)
     print "Timed Loop Sleep:", histogram_timer_1.summary()
     print "Random Sleep:", histogram_timer_2.summary()
