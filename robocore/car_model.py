@@ -1,13 +1,10 @@
 import time
 import threading
 import sys
-import select
 
-import timer
-import motor
-import perceptor
+import util
 
-D = True
+DEBUG = False
 
 class Pid:
     def __init__(self, k_p, k_i, k_d):
@@ -15,33 +12,23 @@ class Pid:
         self.k_i = float(k_i)
         self.k_d = float(k_d)
         self.prev_error = 0.0
-        self.prev_timestamp = 0.0
         self.sum_error_time = 0.0
-        self.first_run = True
 
-    def update(self, error, timestamp):
-        if self.first_run:
-            self.first_run = False
-            self.prev_error = error
-            self.prev_timestamp = timestamp
-            return None
-
-        t = timestamp - self.prev_timestamp
-        self.prev_timestamp = timestamp
+    def update(self, error, time_delta):
         p = self.k_p * error
-        self.sum_error_time += error * t
+        self.sum_error_time += error * time_delta
         i = self.k_i * self.sum_error_time
-        d = self.k_d * (error - self.prev_error) / t
+        if time_delta > 0.0:
+            d = self.k_d * (error - self.prev_error) / time_delta
+        else:   # first loop
+            d = 0.0
         self.prev_error = error
 
         pid = p + i + d
 
-        if D: print "P=%.3f I=%.3f D=%.3f t=%.3f PID=%.3f" % (p, i, d, t, pid)
+        if DEBUG: print "P=%.3f I=%.3f D=%.3f t=%.3f PID=%.3f" % (p, i, d, error_time_delta, pid)
 
         return pid
-
-def minmax(value, value_min, value_max):
-    return min(max(value, value_min), value_max)
 
 class Instruction:
     def __init__(self, left_power, right_power):
@@ -58,10 +45,11 @@ class Instruction:
         s += " ***"
         return s
 
-"""
-Jaycar chassis, stem caster, 7.2 volts
-"""
+
 class RoboCar72v:
+    """
+    Jaycar 2WD chassis, stem caster, 7.2 volts
+    """
     def __init__(self):
         self.base_power = 0xFF
 
@@ -75,42 +63,17 @@ class RoboCar72v:
 
     def process(self, observation):
         cross_track_error = observation.cross_track_error
-        timestamp = observation.timestamp
 
         if not observation.visible:
             return Instruction(0x00, 0x00)
 
-        power_delta = self.pid.update(cross_track_error, timestamp)
-
-        if power_delta is None:
-            return Instruction(0x00, 0x00)
+        power_delta = self.pid.update(cross_track_error, observation.time_delta)
 
         left_power = min(self.base_power, self.base_power + power_delta)
         right_power = min(self.base_power, self.base_power - power_delta)
 
         # sanity check
-        left_power = minmax(left_power, -0xFF, 0xFF)
-        right_power = minmax(right_power, -0xFF, 0xFF)
+        left_power = util.minmax(left_power, -0xFF, 0xFF)
+        right_power = util.minmax(right_power, -0xFF, 0xFF)
 
         return Instruction(left_power, right_power)
-
-def get_car_model():
-    return RoboCar72v()
-
-def main(args):
-    car = get_car_model()
-
-    CROSS_TRACK_ERRORS = [0, -0.1, -0.1, -0.1, 0, 0, -1, -1, -1]
-    timestamp = 0.0
-    for error in CROSS_TRACK_ERRORS:
-        observation = perceptor.Observation(error, True, timestamp)
-        instruction = car.process(observation)
-        print observation, instruction
-        timestamp += 0.2
-
-if __name__ == "__main__":
-    #test()
-    #calibrate()
-    #verify()
-    #testMinimumSpeed()
-    main(None)

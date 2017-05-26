@@ -7,8 +7,8 @@ import processimage
 import select
 import sys
 
-LEFT = 0xFF
-RIGHT = 0xFF
+FAST = 0xD0
+SLOW = 0xB0
 
 motor = motorcontrol.MotorControl()
 
@@ -16,11 +16,11 @@ done = False
 while not done:
     c = sys.stdin.readline()[0]
     if (c == 'w' or c == 'W'):
-        motor.drive(LEFT, RIGHT)
+        motor.drive(SLOW, SLOW)
     if (c == 'd' or c == 'D'):
-        motor.drive(0x00, RIGHT)
+        motor.drive(0x00, FAST)
     if (c == 'a' or c == 'A'):
-        motor.drive(LEFT, 0x00)
+        motor.drive(FAST, 0x00)
     if (c == 'q' or c == 'Q'):
         done = True
     if (c == 's' or c == 'S'):

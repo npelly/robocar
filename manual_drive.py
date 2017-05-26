@@ -1,7 +1,10 @@
 import pygame
 import sys
 import time
-import motor
+
+
+import robocore.motor
+import robocore.car_model
 
 FAST = 0xFF
 SLOW = 0xB0
@@ -23,39 +26,44 @@ windowSurface.blit(text, (0, 0))
 # draw the window onto the screen
 pygame.display.update()
 
-motor = motor.get_default_motor()
+if robocore.util.isRaspberryPi():
+    motor = robocore.motor.ArduinoSerialMotor()
+else:
+    motor = robocore.motor.DummyMotor()
 
-# run the game loop
-running = True
-lastLeft = 0x00
-lastRight = 0x00
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-            running = False
-    if not running: break
-    keys = pygame.key.get_pressed()
+with motor:
+    prev_left_power = 0x00
+    prev_right_power = 0x00
+    running = True
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                running = False
+        if not running: break
 
-    left = 0x00
-    right = 0x00
-    if keys[pygame.K_w]:
-        left = SLOW
-        right = SLOW
-    if keys[pygame.K_s]:
-        left = -SLOW
-        right = -SLOW
-    if keys[pygame.K_a]:
-        right = FAST
-    if keys[pygame.K_d]:
-        left = FAST
+        keys = pygame.key.get_pressed()
 
-    if lastLeft != left or lastRight != right:
-        motor.drive(left, right)
-    lastLeft = left
-    lastRight = right
+        left_power = 0x00
+        right_power = 0x00
+        if keys[pygame.K_w]:
+            left_power = SLOW
+            right_power = SLOW
+        if keys[pygame.K_s]:
+            left_power = -SLOW
+            right_power = -SLOW
+        if keys[pygame.K_a]:
+            right_power = FAST
+        if keys[pygame.K_d]:
+            left_power = FAST
 
-motor.close()
+        if prev_left_power != left_power or prev_right_power != right_power:
+            instruction = robocore.car_model.Instruction(left_power, right_power)
+            motor.process(instruction)
+            print instruction
+        prev_left_power = left_power
+        prev_right_power = right_power
+
 pygame.quit()
 sys.exit()

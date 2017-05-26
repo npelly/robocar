@@ -3,15 +3,13 @@ import sys
 import numpy
 import time
 import os
-import argparse
-
-import timer
 
 class Observation:
-    def __init__(self, cross_track_error, visible, timestamp):
+    def __init__(self, cross_track_error, visible, obs_time, obs_time_delta):
         self.cross_track_error = cross_track_error
         self.visible = visible
-        self.timestamp = timestamp
+        self.time = obs_time
+        self.time_delta = obs_time_delta
 
     def __str__(self):
         if not self.visible: return "-----"
@@ -52,7 +50,7 @@ class Perceptor:
 
         error, visible = self._cross_track_error(image)
 
-        return Observation(error, visible, camera_image.timestamp)
+        return Observation(error, visible, camera_image.time, camera_image.time_delta)
 
     """
     distance_weight is the weight of pixels at y=0 compared to weight at y=Y
@@ -92,23 +90,3 @@ class Perceptor:
     #    print numpy.sum(target_region * WEIGHTS)
         pixel_error = numpy.sum(target_region * self.weights) / target_sum
         return (pixel_error, True)
-
-def get_perceptor(resolution):
-    return Perceptor(resolution)
-
-def test():
-    import camera
-    cam = camera.get_camera()
-    per = get_perceptor(camera.CAMERA_RESOLUTION)
-
-    queue = cam.start()
-    camera_image = queue.get()
-    cam.close()
-
-    observation = per.process(camera_image, show=True)
-
-    print camera_image, observation
-
-
-if __name__ == "__main__":
-    test()
