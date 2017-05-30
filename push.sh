@@ -5,5 +5,5 @@
 # and only copy directories that have something
 # DEBUG: use --dry-run
 
-rsync -vr --prune-empty-dirs --include "*/" --include="*.py" --include "main.cpp" --exclude "*" \
+rsync -vr --prune-empty-dirs --include "*/" --include="*.py" --include "*.js" --include "*.html" --include "main.cpp" --exclude "*" \
     ~/code/robocar/ pi@pi.local:~/code/robocar

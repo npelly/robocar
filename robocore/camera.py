@@ -26,7 +26,7 @@ class CameraImage:
         (y, x, c) = self.image.shape
         return "%dx%dx%d@%.3f" % (x, y, c, self.time)
 
-class UdpSink():
+class UdpSink:
     # Receive with
     # /Applications/VLC.app/Contents/MacOS/VLC --demux h264 udp://:8002
     def __init__(self, server_address):

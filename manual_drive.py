@@ -2,7 +2,6 @@ import pygame
 import sys
 import time
 
-
 import robocore.motor
 import robocore.car_model
 

@@ -16,6 +16,7 @@ import robocore.camera
 import robocore.perceptor
 import robocore.car_model
 import robocore.motor
+import robocore.telemetry_server
 import robocore.util
 
 
@@ -32,11 +33,14 @@ if __name__ == "__main__":
             motor = robocore.motor.ArduinoSerialMotor()
         else:
             motor = robocore.motor.DummyMotor()
+        telemetry_server = robocore.telemetry_server.TelemetryServer()
     else:
         camera = robocore.camera.DummyCamera(resolution, framerate)
         perceptor = robocore.perceptor.Perceptor(resolution)
         car_model = robocore.car_model.RoboCar72v()
         motor = robocore.motor.DummyMotor()
+        telemetry_server = robocore.telemetry_server.TelemetryServer()
+
 
     perceptor_profiler = robocore.util.SectionProfiler()
     car_model_profiler = robocore.util.SectionProfiler()
@@ -44,7 +48,7 @@ if __name__ == "__main__":
 
     print "ENTER to finish"
 
-    with camera as camera_image_queue, motor:
+    with camera as camera_image_queue, motor, telemetry_server:
         while not robocore.util.check_stdin():
             try:
                 image = camera_image_queue.get(block=True, timeout=1.0)
@@ -64,6 +68,8 @@ if __name__ == "__main__":
                 motor.process(instructions)
 
             print image, observations, instructions
+
+            telemetry_server.send(image, observations, instructions)
 
             #statistics.process(observations, instructions)
 
