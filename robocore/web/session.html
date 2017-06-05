@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+  <title>Robocar Telemetry</title>
+	<style>
+		body {
+			font-family: monospace, serif;
+		}
+		img.image {
+      float: left;
+      padding: 0px 0px 0px 0px;
+    }
+		div.spacer {
+      clear: both;
+      padding: 5px 0px 0px 0px;
+    }
+	</style>
+</head>
+<body>
+		<h2> Session {{ session["time_str"] }} </h2>
+
+		{% for i in xrange(len(session["atoms"])) %}
+
+    <img class="image" id="frame"
+		src="/api/session/{{ escape(str(session["id"])) }}/{{ escape(str(i)) }}"></img>
+
+		<b>@{{ session["atoms"][i].time }}</b><br>
+
+		{% for key in session["atoms"][i].data %}
+
+		{{ key }}: {{ session["atoms"][i].data[key] }}<br>
+
+		{% end %}
+		<div class="spacer"></div>
+		{% end %}
+
+
+</body>
+</html>

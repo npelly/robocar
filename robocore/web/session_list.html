@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+		<h2> Sessions </h2>
+
+    {% for session in sessions %}
+    <div>
+      <a href="/api/session/{{ escape(str(session["id"])) }}">
+      {{ session["time_str"] }}
+    	</a>
+    </div>
+    {% end %}
+
+</body>
+</html>
