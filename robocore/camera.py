@@ -2,6 +2,9 @@ import time
 import os
 import sys
 import numpy
+import PIL.Image
+import PIL.ImageDraw
+import PIL.ImageFont
 import Queue
 import threading
 import cv2
@@ -97,15 +100,21 @@ class DummyCamera:
         (X, Y) = self.resolution
         loop = util.ConstantRateLoop(self.framerate)
         loop_profiler = util.LoopProfiler()
-        image = numpy.zeros((Y, X, 3), numpy.uint8)
-        first_time = -1.0
-        prev_time = -1.0
+
+        pil_image = PIL.Image.new("RGB", (X, Y))
+        fnt = PIL.ImageFont.load_default()
+        draw = PIL.ImageDraw.Draw(pil_image)
+        draw.text((1, 1), "<dummy camera>", font=fnt, fill=(255, 255, 255))
 
         while not self.cancel:
             loop.sleep()
             delta_time, cumulative_time = loop_profiler.time()
 
             if self.cancel: break
+
+            draw.rectangle([(1, 20), (X, Y)], fill=(0, 0, 0))
+            draw.text((1, 20), str(cumulative_time), font=fnt, fill=(255, 255, 255))
+            image = numpy.asarray(pil_image)
 
             if not self.queue.empty(): self.queue.get(block=False)  # clear queue
             self.queue.put(CameraImage(image, cumulative_time, delta_time))
