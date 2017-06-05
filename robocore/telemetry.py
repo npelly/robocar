@@ -18,7 +18,7 @@ class TelemetryAtom:
         assert isinstance(data, dict)
 
         self.time = time    # (float) local timestamp in seconds
-        self.image = image  # (bytes) PNG image
+        self.image = image  # (bytes) JPEG image
         self.data = data    # (dict) key-value telemetry
 
     def dump(self):

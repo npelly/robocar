@@ -7,7 +7,7 @@
 		body {
 			font-family: monospace, serif;
 		}
-		img.image {
+		img {
       float: left;
       padding: 0px 0px 0px 0px;
     }
@@ -20,20 +20,31 @@
 <body>
 		<h2> Session {{ session["time_str"] }} </h2>
 
-		{% for i in xrange(len(session["atoms"])) %}
-
-    <img class="image" id="frame"
-		src="/api/session/{{ escape(str(session["id"])) }}/{{ escape(str(i)) }}"></img>
-
-		<b>@{{ session["atoms"][i].time }}</b><br>
-
-		{% for key in session["atoms"][i].data %}
-
-		{{ key }}: {{ session["atoms"][i].data[key] }}<br>
-
+		{% for atom_id in xrange(len(session["atoms"])) %}
+		{% include session_atom.html %}
 		{% end %}
-		<div class="spacer"></div>
-		{% end %}
+
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js" type="text/javascript"></script>
+		<script>
+				var next_atom_id = {{ len(session["atoms"]) }}
+				var session_id = {{ session["id"] }}
+
+				$(document).ready(function() {
+				    poll();
+				});
+
+				function poll() {
+					$.ajax({
+						url: session_id + "/" + next_atom_id,
+						success: function(data) {
+							$("body").append(data);
+							next_atom_id++;
+							window.scrollTo(0,document.body.scrollHeight);
+							window.setTimeout(poll, 0);
+						}
+					});
+				}
+    </script>
 
 
 </body>

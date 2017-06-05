@@ -1,0 +1,10 @@
+<img src="/session/{{ session["id"] }}/image/{{ atom_id }}"></img>
+
+<b>@{{ session["atoms"][atom_id].time }}</b><br>
+
+{% for key in session["atoms"][atom_id].data %}
+
+{{ key }}: {{ session["atoms"][atom_id].data[key] }}<br>
+
+{% end %}
+<div class="spacer"></div>

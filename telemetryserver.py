@@ -34,30 +34,48 @@ class MainHandler(tornado.web.RequestHandler):
     def get(self):
         self.render("session_list.html", sessions=self.telemetry_server.sessions)
 
+class AtomHandler(tornado.web.RequestHandler):
+    def initialize(self, telemetry_server):
+        self.telemetry_server = telemetry_server
+
+    @tornado.gen.coroutine
+    def get(self, session_id=None, atom_id=None):
+        session_id = int(session_id)
+        atom_id = int(atom_id)
+        try:
+            session = self.telemetry_server.sessions[session_id]
+            if atom_id >= len(session["atoms"]):
+                yield self.telemetry_server.wait_for_atom(session_id, atom_id)
+            self.render("session_atom.html", session=session, atom_id=atom_id)
+        except KeyError:
+            raise tornado.web.HTTPError(404, "Bad Session ID")
+
 class ImageHandler(tornado.web.RequestHandler):
     def initialize(self, telemetry_server):
         self.telemetry_server = telemetry_server
 
-    def get(self, session_id=None, image_id=None):
-        for session in self.telemetry_server.sessions:
-            if session["id"] == int(session_id):
-                image = session["atoms"][int(image_id)].image
-                self.set_header("Content-type", "image/png")
-                self.set_header("Content-length", len(image))
-                self.write(image)
-                return
-        raise tornado.web.HTTPError(404, "Bad Session ID")
+    def get(self, session_id=None, atom_id=None):
+        session_id = int(session_id)
+        atom_id = int(atom_id)
+        try:
+            session = self.telemetry_server.sessions[session_id]
+            image = session["atoms"][atom_id].image
+            self.set_header("Content-type", "image/jpeg")
+            self.set_header("Content-length", len(image))
+            self.write(image)
+        except KeyError:
+            raise tornado.web.HTTPError(404, "Bad Session ID")
 
 class SessionHandler(tornado.web.RequestHandler):
     def initialize(self, telemetry_server):
         self.telemetry_server = telemetry_server
 
     def get(self, session_id=None):
-        for session in self.telemetry_server.sessions:
-            if session["id"] == int(session_id):
-                self.render("session.html", session=session)
-                return
-        raise tornado.web.HTTPError(404, "Bad Session ID")
+        try:
+            session = self.telemetry_server.sessions[int(session_id)]
+            self.render("session.html", session=session)
+        except KeyError:
+            raise tornado.web.HTTPError(404, "Bad Session ID")
 
 class TelemetryHandler(tornado.websocket.WebSocketHandler):
     def initialize(self, telemetry_server):
@@ -66,20 +84,18 @@ class TelemetryHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         start_time = time.time()
         print "Telemetry session started", start_time
-        self.session = robocore.telemetry.TelemetrySession(start_time, {})
-        self.id = session_to_id(self.session)
-        self.atoms = []
+        session = robocore.telemetry.TelemetrySession(start_time, {})
+        self.session_id = self.telemetry_server.new_session(session)
 
     def on_message(self, message):
         atom = robocore.telemetry.load_atom(message)
         print ".",
         sys.stdout.flush()
-        self.atoms.append(atom)
+        self.telemetry_server.new_atom(self.session_id, atom)
 
     def on_close(self):
         print "\nTelemetry session finished"
-        if len(self.atoms) > 0:
-            self.telemetry_server.save(self.session, self.atoms)
+        self.telemetry_server.save_session(self.session_id)
 
 def session_to_id(telemetry_session):
     return int(telemetry_session.start_time)  # crappy hash
@@ -87,17 +103,17 @@ def session_to_id(telemetry_session):
 class TelemetryServer:
     def __init__(self, path):
         self.path = path
-        self.sessions = self._load(path)   # list of dict()s
+        self.sessions = self._load(path) # {session_id -> dict()}
+        self.waiters = {}       # {session_id -> {atom_id -> [Futures]}}
 
     def _load(self, path):
-        sessions = []
-
+        sessions = {}
         try:
             for file in os.listdir(path):
                 filepath = os.path.join(path, file)
                 if os.path.isfile(filepath) and filepath.endswith(".robo"):
-
-                    sessions.append(self._loadFile(filepath))
+                    session = self._loadFile(filepath)
+                    sessions[session["id"]] = session
         except (OSError, IOError):
             pass
 
@@ -121,7 +137,37 @@ class TelemetryServer:
         return {"id": id, "session": session, "atoms": atoms,
             "time_str": time_to_str(session.start_time)}
 
-    def save(self, session, atoms):
+    def wait_for_atom(self, session_id, atom_id):
+        result_future = tornado.concurrent.Future()
+        self.waiters.setdefault(session_id, {})
+        self.waiters[session_id].setdefault(atom_id, [])
+        self.waiters[session_id][atom_id].append(result_future)
+        return result_future
+
+    def new_session(self, session):
+        session = self._create_dict_session(session, [])
+        session_id = session["id"]
+        self.sessions[session_id] = session
+        return session_id
+
+    def new_atom(self, session_id, atom):
+        session = self.sessions[session_id]
+        atoms = session["atoms"]
+        atom_id = len(atoms)
+        atoms.append(atom)
+
+        try:
+            futures = self.waiters[session_id].pop(atom_id)
+            for future in futures:
+                future.set_result([])   #TODO clear futures in cleanup paths
+        except KeyError:
+            pass
+
+        return atom_id
+
+    def save_session(self, session_id):
+        session = self.sessions[session_id]["session"]
+        atoms = self.sessions[session_id]["atoms"]
         try:
             filename = time_to_str(session.start_time) + ".robo"
             filepath = os.path.join(self.path, filename)
@@ -139,8 +185,6 @@ class TelemetryServer:
         except (OSError, IOError):
             print "WARNING: failed to write %s" % filepath
 
-        self.sessions.append(self._create_dict_session(session, atoms))
-
 def time_to_str(time):
     return datetime.datetime.fromtimestamp(time).strftime("%Y-%m-%d-%H%M%S")
 
@@ -154,9 +198,10 @@ if __name__ == "__main__":
     app = tornado.web.Application(
         [
             (r"/",              MainHandler, dict(telemetry_server=telemetry_server)),
-            (r"/api/session/(?P<session_id>\w+)", SessionHandler, dict(telemetry_server=telemetry_server)),
-            (r"/api/session/(?P<session_id>\w+)/(?P<image_id>\w+)", ImageHandler, dict(telemetry_server=telemetry_server)),
-            (r"/api/telemetry", TelemetryHandler, dict(telemetry_server=telemetry_server)),
+            (r"/session/(?P<session_id>\w+)", SessionHandler, dict(telemetry_server=telemetry_server)),
+            (r"/session/(?P<session_id>\w+)/(?P<atom_id>\w+)", AtomHandler, dict(telemetry_server=telemetry_server)),
+            (r"/session/(?P<session_id>\w+)/image/(?P<atom_id>\w+)", ImageHandler, dict(telemetry_server=telemetry_server)),
+            (r"/telemetry", TelemetryHandler, dict(telemetry_server=telemetry_server)),
         ],
         template_path=os.path.join(os.path.dirname(__file__), "robocore", "web"),
         static_path=os.path.join(os.path.dirname(__file__), "robocore", "web"),

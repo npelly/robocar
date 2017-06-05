@@ -3,9 +3,9 @@
 <body>
 		<h2> Sessions </h2>
 
-    {% for session in sessions %}
+    {% for _, session in sessions.iteritems() %}
     <div>
-      <a href="/api/session/{{ escape(str(session["id"])) }}">
+      <a href="/session/{{ escape(str(session["id"])) }}">
       {{ session["time_str"] }}
     	</a>
     </div>

@@ -29,7 +29,7 @@ if __name__ == "__main__":
     telemetry_server = args["--telemetry"]
 
     if telemetry_server:
-        telemetry_server = "ws://%s/api/telemetry" % telemetry_server
+        telemetry_server = "ws://%s/telemetry" % telemetry_server
 
     if robocore.util.isRaspberryPi():
         camera = robocore.camera.PiCamera(resolution, framerate)

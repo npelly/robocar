@@ -41,20 +41,26 @@ class TelemetryProducer:
             return
 
         profiler = util.SectionProfiler()
+        pil_profiler = util.SectionProfiler()
+        network_profiler = util.SectionProfiler()
 
         while self.running:
             camera_image, observation, instruction = self.queue.get()
 
             if not self.running: break
 
+            if self.queue.qsize() > 10:
+                print "WARNING: telemetry is %d frames behind" % self.queue.qsize()
+
             with profiler:
                 time = camera_image.time
 
-                # camera_image.image is numpy.ndarray, dtype=uint8
-                pil_image = PIL.Image.fromarray(camera_image.image)
-                image_io = io.BytesIO()
-                pil_image.save(image_io, format='png')
-                image = image_io.getvalue()  # bytearray
+                with pil_profiler:
+                    # camera_image.image is numpy.ndarray, dtype=uint8
+                    pil_image = PIL.Image.fromarray(camera_image.image)
+                    image_io = io.BytesIO()
+                    pil_image.save(image_io, format='jpeg')
+                    image = image_io.getvalue()  # bytearray
 
                 data = dict()
                 data["time_delta"] = camera_image.time_delta
@@ -67,7 +73,10 @@ class TelemetryProducer:
 
                 out = telemetry_atom.dump()
 
-                web_socket.send_binary(out)
+                with network_profiler:
+                    web_socket.send_binary(out)
 
         web_socket.close()
         print "Telemetry Producer timing:", profiler
+        print "PIL timing:", pil_profiler
+        print "Network timing:", network_profiler
