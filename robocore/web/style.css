@@ -1,0 +1,11 @@
+body {
+  font-family: monospace, serif;
+}
+img.camera {
+  float: left;
+  padding: 0px 0px 0px 0px;
+}
+div.spacer {
+  clear: both;
+  padding: 5px 0px 0px 0px;
+}

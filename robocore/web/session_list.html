@@ -1,15 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-<body>
-		<h2> Sessions </h2>
+{% extends "base.html" %}
+{% block content %}
+	<div>
+		<a href="/session/live">Live</a>
+	</div>
 
-    {% for _, session in sessions.iteritems() %}
-    <div>
-      <a href="/session/{{ escape(str(session["id"])) }}">
-      {{ session["time_str"] }}
-    	</a>
-    </div>
-    {% end %}
+	{% for session_id, session in enumerate(sessions) %}
+		{% include session_list_item.html %}
+	{% end %}
 
-</body>
-</html>
+	<script>
+		$(document).ready(function() {
+				pollSessionList();
+		});
+	</script>
+
+{% end %}

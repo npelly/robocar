@@ -1,0 +1,11 @@
+<img class="camera" src="/session/{{ session[".id"] }}/image/{{ atom[".id"] }}"></img>
+
+<b>@{{ atom["time"] }}</b><br>
+
+{% for k, v in atom.iteritems() %}
+  {% if k.startswith(".") or k == "image" or k == "time": continue %}
+
+  {{ k }}: {{ v }}<br>
+
+{% end %}
+<div class="spacer"></div>

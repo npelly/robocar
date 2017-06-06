@@ -6,12 +6,12 @@ import socket
 import threading
 import websocket
 
-import telemetry
+import telemetry_utils
 import util
 
-class TelemetryProducer:
+class TelemetryClient:
     def __init__(self, server):
-        self.server = server
+        self.server = "ws://%s/api/telemetry" % server
         self.running = False
 
     def __enter__(self):
@@ -40,9 +40,10 @@ class TelemetryProducer:
             self.running = False
             return
 
+        session = telemetry_utils.create_session()
+        web_socket.send_binary(telemetry_utils.dump_session(session))
+
         profiler = util.SectionProfiler()
-        pil_profiler = util.SectionProfiler()
-        network_profiler = util.SectionProfiler()
 
         while self.running:
             camera_image, observation, instruction = self.queue.get()
@@ -55,28 +56,22 @@ class TelemetryProducer:
             with profiler:
                 time = camera_image.time
 
-                with pil_profiler:
-                    # camera_image.image is numpy.ndarray, dtype=uint8
-                    pil_image = PIL.Image.fromarray(camera_image.image)
-                    image_io = io.BytesIO()
-                    pil_image.save(image_io, format='jpeg')
-                    image = image_io.getvalue()  # bytearray
+                # camera_image.image is numpy.ndarray, dtype=uint8
+                pil_image = PIL.Image.fromarray(camera_image.image)
+                image_io = io.BytesIO()
+                pil_image.save(image_io, format='jpeg')
+                image = image_io.getvalue()  # bytearray
 
-                data = dict()
-                data["time_delta"] = camera_image.time_delta
-                data["cross_track_error"] = observation.cross_track_error
-                data["visible"] = observation.visible
-                data["left_power"] = instruction.left_power
-                data["right_power"] = instruction.right_power
+                atom = telemetry_utils.create_atom(time, image)
+                atom["time_delta"] = camera_image.time_delta
+                atom["cross_track_error"] = observation.cross_track_error
+                atom["visible"] = observation.visible
+                atom["left_power"] = instruction.left_power
+                atom["right_power"] = instruction.right_power
 
-                telemetry_atom = telemetry.TelemetryAtom(time, image, data)
+                out = telemetry_utils.dump_atom(atom)
 
-                out = telemetry_atom.dump()
-
-                with network_profiler:
-                    web_socket.send_binary(out)
+                web_socket.send_binary(out)
 
         web_socket.close()
-        print "Telemetry Producer timing:", profiler
-        print "PIL timing:", pil_profiler
-        print "Network timing:", network_profiler
+        print "Telemetry Client Timing:", profiler

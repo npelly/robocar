@@ -18,7 +18,7 @@ import robocore.camera
 import robocore.perceptor
 import robocore.car_model
 import robocore.motor
-import robocore.telemetry_producer
+import robocore.telemetry_client
 import robocore.util
 
 
@@ -28,9 +28,6 @@ if __name__ == "__main__":
     resolution = (160, 128)
     telemetry_server = args["--telemetry"]
 
-    if telemetry_server:
-        telemetry_server = "ws://%s/telemetry" % telemetry_server
-
     if robocore.util.isRaspberryPi():
         camera = robocore.camera.PiCamera(resolution, framerate)
         perceptor = robocore.perceptor.Perceptor(resolution)
@@ -39,13 +36,15 @@ if __name__ == "__main__":
             motor = robocore.motor.ArduinoSerialMotor()
         else:
             motor = robocore.motor.DummyMotor()
-        telemetry_producer = robocore.telemetry_producer.TelemetryProducer(telemetry_server)
+        if telemetry_server:
+            telemetry_client = robocore.telemetry_client.TelemetryClient(telemetry_server)
     else:
         camera = robocore.camera.DummyCamera(resolution, framerate)
         perceptor = robocore.perceptor.Perceptor(resolution)
         car_model = robocore.car_model.RoboCar72v()
         motor = robocore.motor.DummyMotor()
-        telemetry_producer = robocore.telemetry_producer.TelemetryProducer(telemetry_server)
+        if telemetry_server:
+            telemetry_client = robocore.telemetry_client.TelemetryClient(telemetry_server)
 
     perceptor_profiler = robocore.util.SectionProfiler()
     car_model_profiler = robocore.util.SectionProfiler()
@@ -53,7 +52,7 @@ if __name__ == "__main__":
 
     print "ENTER to finish"
 
-    with camera as camera_image_queue, motor, telemetry_producer:
+    with camera as camera_image_queue, motor, telemetry_client:
         while not robocore.util.check_stdin():
             try:
                 image = camera_image_queue.get(block=True, timeout=1.0)
@@ -74,7 +73,8 @@ if __name__ == "__main__":
 
             print image, observations, instructions
 
-            telemetry_producer.process(image, observations, instructions)
+            if telemetry_client:
+                telemetry_client.process(image, observations, instructions)
 
     print "Perception processing:", perceptor_profiler
     print "Car Model processing:", car_model_profiler
