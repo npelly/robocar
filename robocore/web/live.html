@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Live telemetry...</h2>
+
+  <script>
+    $(document).ready(function() {
+        pollLive();
+    });
+  </script>
+{% end %}

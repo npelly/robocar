@@ -1,11 +1,18 @@
-<img class="camera" src="/session/{{ session[".id"] }}/image/{{ atom[".id"] }}"></img>
+<img
+  class="camera"
+  src="/session/{{ session[".id"] }}/image/{{ atom_id }}"
+  onclick="imageClick(this)"
+  style="cursor:pointer;"
+  />
 
 <b>@{{ atom["time"] }}</b><br>
 
 {% for k, v in atom.iteritems() %}
-  {% if k.startswith(".") or k == "image" or k == "time": continue %}
-
+  {% if k.startswith(".") or k == "image" or k == "time" %}
+    {% continue %}
+  {% end %}
   {{ k }}: {{ v }}<br>
-
 {% end %}
+
+<script>var atom_id = {{ atom_id }};</script>
 <div class="spacer"></div>

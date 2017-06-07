@@ -30,6 +30,8 @@ import robocore.telemetry_utils
 class BaseHandler(tornado.web.RequestHandler):
     def initialize(self, server):
         self.server = server
+    def render_without_finish(self, template_name, **kwargs):
+        self.write(self.render_string(template_name, **kwargs))
 
 class SessionListHandler(BaseHandler):
     def get(self):
@@ -38,11 +40,83 @@ class SessionListHandler(BaseHandler):
 class SessionListMoreHandler(BaseHandler):
     @tornado.gen.coroutine
     def get(self):
-        session_id = int(self.get_argument("session_id")) + 1
+        try:
+            session_id = int(self.get_argument("session_id")) + 1
+        except (ValueError, TypeError):
+            raise tornado.web.HTTPError(400, "invalid session_id parameter")
         while session_id >= len(self.server.sessions):
             yield self.server.wait_for_session()
         for session in self.server.sessions[session_id:]:
-            self.render("session_list_item.html", session=session)
+            self.render_without_finish("session_list_item.html", session=session)
+        self.finish()
+
+class SessionHandler(BaseHandler):
+    def get(self, session_id=None):
+        try:
+            session_id = int(session_id)
+            session = self.server.sessions[session_id]
+        except (IndexError, ValueError, TypeError):
+            raise tornado.web.HTTPError(404, "invalid session_id (%s)" % str(session_id))
+        self.render("session.html", session=session)
+
+class ImageHandler(BaseHandler):
+    def get(self, session_id=None, atom_id=None):
+        try:
+            session_id = int(session_id)
+            atom_id = int(atom_id)
+            image = self.server.sessions[session_id]["atoms"][atom_id]["image"]
+        except (IndexError, ValueError, TypeError):
+            raise tornado.web.HTTPError(404, "invalid session_id (%s) or atom_id (%s)" % (str(session_id), str(atom_id)))
+        self.set_header("Content-type", "image/jpeg")
+        self.set_header("Content-length", len(image))
+        self.write(image)
+        self.finish()
+
+class LiveHandler(BaseHandler):
+    def get(self):
+        self.render("live.html", sessions=self.server.sessions)
+
+class LiveMoreHandler(BaseHandler):
+    @tornado.gen.coroutine
+    def get(self):
+        try:
+            session_id = int(self.get_argument("session_id"))
+            atom_id = int(self.get_argument("atom_id"))
+        except (ValueError, TypeError):
+            raise tornado.web.HTTPError(400, "invalid session_id or atom_id parameter")
+
+        if session_id in xrange(len(self.server.sessions)) and self.server.sessions[session_id].get(".live", False):
+            # current session is live, look for new atoms
+            session = self.server.sessions[session_id]
+            atom_id += 1
+            if atom_id >= len(session["atoms"]):
+                yield self.server.wait_for_atom(session_id)
+            for id, atom in list(enumerate(session["atoms"]))[atom_id:]:
+                self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
+        elif session_id in xrange(len(self.server.sessions)):
+            # session_id is valid, but session is no longer live
+            session = self.server.sessions[session_id]
+            # send remaining atoms
+            atom_id += 1
+            for id, atom in list(enumerate(session["atoms"]))[atom_id:]:
+                self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
+            # tell client to search a new session
+            self.write("<script>var session_id = -1; var atom_id = -1;</script>")
+        else:  # session_id == -1
+            # look for live session
+            session_id +=1
+            for id, session in list(enumerate(self.server.sessions))[session_id:]:
+                if session.get(".live", False):
+                    session_id = id
+            else:  # no live sessions, wait for one
+                session_id = yield self.server.wait_for_session()
+            # session_id now live
+            session = self.server.sessions[session_id]
+            self.render_without_finish("session_header.html", session=session)
+            for id, atom in session["atoms"]:
+                self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
+        self.finish()
+
 """
 class AtomHandler(tornado.web.RequestHandler):
     def initialize(self, telemetry_server):
@@ -79,21 +153,6 @@ class LiveSessionHandler(tornado.web.RequestHandler):
         (session_id, atom_id) yield self.telemetry_server.wait_for_atom()
         session = self.telemetry_server.sessions[session_id]
         self.render("session_atom.html", session=session, atom_id=atom_id)
-
-class ImageHandler(tornado.web.RequestHandler):
-    def initialize(self, server):
-        self.server = server
-
-    def get(self, session_id=None, atom_id=None):
-        session_id = int(session_id)
-        atom_id = int(atom_id)
-        try:
-            image = sessions[session_id]["atoms"][atom_id]["image"]
-            self.set_header("Content-type", "image/jpeg")
-            self.set_header("Content-length", len(image))
-            self.write(image)
-        except KeyError:
-            raise tornado.web.HTTPError(404, "invalid session_id or atom_id")
 
 class SessionHandler(tornado.web.RequestHandler):
     def initialize(self, server):
@@ -237,24 +296,41 @@ class TelemetryServer:
     def register_session(self, session):
         id = len(self.sessions)
         session[".id"] = id
+        session[".live"] = True
         self.sessions.append(session)
 
         for future in self.session_futures:
-            future.set_result([])
+            future.set_result(id)
         self.session_futures.clear()
 
         return id
 
     def register_atom(self, session_id, atom):
         self.sessions[session_id]["atoms"].append(atom)
+        for future in self.sessions[session_id].pop(".futures", set()):
+            future.set_result([])
 
     def close_session(self, session_id):
+        self.sessions[session_id].pop(".live")
+        for future in self.sessions[session_id].pop(".futures", set()):
+            future.set_result([])
         save_telemetry(self.path, self.sessions[session_id])
 
     def wait_for_session(self):
         future = tornado.concurrent.Future()
         self.session_futures.add(future)
         return future
+
+    def wait_for_atom(self, session_id):
+        """
+        Wait for another atom on this session, or for the session to end.
+        Session must be live.
+        """
+        future = tornado.concurrent.Future()
+        self.sessions[session_id].setdefault(".futures", set())
+        self.sessions[session_id][".futures"].add(future)
+        return future
+
 """
     def wait_for_atom(self, session_id, atom_id):
         result_future = tornado.concurrent.Future()
@@ -319,13 +395,13 @@ if __name__ == "__main__":
 
             # /session/0                        non-blocking, returns full page, atom_id = -1.... more=true/false
             # /session/0/image/0                non-blocking, returns image
-#            (r"/session/(?P<session_id>\w+)", SessionHandler,     dict(server=server)),
-#            (r"/session/(?P<session_id>\w+)/image/(?P<atom_id>\w+)", ImageHandler, dict(server=server)),
+            (r"/session/(?P<session_id>\w+)", SessionHandler,     dict(server=server)),
+            (r"/session/(?P<session_id>\w+)/image/(?P<atom_id>\w+)", ImageHandler, dict(server=server)),
 
-            # /session/live                 non-blocking, return full page of current session if exists
-            # /session/live/more?session_id=[session_id]&atom_id=[atom_id]
-#            (r"/session/live",       LiveHandler,     dict(server=server)),
-#            (r"/session/live/more",  LiveMoreHandler, dict(server=server)),
+            # /live                 non-blocking, return full page of current session if exists
+            # /live/more?session_id=[session_id]&atom_id=[atom_id]
+            (r"/live",       LiveHandler,     dict(server=server)),
+            (r"/live/more",  LiveMoreHandler, dict(server=server)),
 
             # Websocket
             (r"/api/telemetry", TelemetryHandler, dict(server=server)),
