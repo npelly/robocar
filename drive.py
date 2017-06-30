@@ -1,12 +1,13 @@
 """Drive Robocar
 
 Usage:
-  drive.py [--framerate=<fps>] [--dummy_motor] [--telemetry SERVER]
+  drive.py [--framerate=<fps>] [--car_model=<model>] [--motor=<motor>] [--telemetry SERVER]
 
 Options:
   -h --help           Print this help text
-  --dummy_motor       Use a dummy motor
   --framerate FPS     Attempt to run camera at specified framerate [DEFAULT: 30]
+  --car_model MODEL   Use specific car model [DEFAULT: auto]
+  --motor MOTOR       Use specified motor control [DEFAULT: auto]
   --telemetry SERVER  Optional Telemetry Server, example "pi.local:7007"
 """
 
@@ -30,21 +31,26 @@ if __name__ == "__main__":
 
     if robocore.util.isRaspberryPi():
         camera = robocore.camera.PiCamera(resolution, framerate)
-        perceptor = robocore.perceptor.Perceptor(resolution)
-        car_model = robocore.car_model.RoboCar72v()
-        if not args["--dummy_motor"]:
-            motor = robocore.motor.ArduinoSerialMotor()
-        else:
-            motor = robocore.motor.DummyMotor()
-        if telemetry_server:
-            telemetry_client = robocore.telemetry_client.TelemetryClient(telemetry_server)
     else:
         camera = robocore.camera.DummyCamera(resolution, framerate)
-        perceptor = robocore.perceptor.Perceptor(resolution)
-        car_model = robocore.car_model.RoboCar72v()
-        motor = robocore.motor.DummyMotor()
-        if telemetry_server:
-            telemetry_client = robocore.telemetry_client.TelemetryClient(telemetry_server)
+    perceptor = robocore.perceptor.Perceptor(resolution)
+    if args["--car_model"] == "auto":
+        if robocore.util.isRobocar1():
+            car_model = robocore.car_model.RoboCar72v()
+        else:
+            car_model = robocore.car_model.ServoCarTenth()
+    else:
+        car_model = getattr(robocore.car_model, args["--car_model"])()
+    if args["--motor"] == "auto":
+        if robocore.util.isRobocar1():
+            motor = robocore.motor.ArduinoSerialMotor()
+        elif robocore.util.isRobocar2():
+            motor = robocore.motor.ServoMotor()
+        else:
+            motor = robocore.motor.DummyMotor()
+    else:
+        motor = getattr(robocore.motor, args["--motor"])()
+    telemetry_client = robocore.telemetry_client.TelemetryClient(telemetry_server)
 
     perceptor_profiler = robocore.util.SectionProfiler()
     car_model_profiler = robocore.util.SectionProfiler()

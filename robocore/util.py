@@ -11,7 +11,19 @@ def minmax(value, value_min, value_max):
 def isRaspberryPi():
     """Return True if running on a Raspberry Pi, False otherwise."""
     try:
+        return os.uname()[1] == "pi" or os.uname()[1] == "euler"
+    except NameError:
+        return False
+
+def isRobocar1():
+    try:
         return os.uname()[1] == "pi"
+    except NameError:
+        return False
+
+def isRobocar2():
+    try:
+        return os.uname()[1] == "euler"
     except NameError:
         return False
 

@@ -67,3 +67,42 @@ class ArduinoSerialMotor:
                 if input and DEBUG: print "<", input,
         except (OSError, select.error, TypeError):
             pass
+
+
+FREQUENCY_HZ_REQUEST = 90.0
+FREQUENCY_HZ = 94.35  # actual frequency (measured by multimeter)
+
+THROTTLE_CHANNEL = 1
+THROTTLE_NEUTRAL_TICK = 600
+THROTTLE_DEFAULT_FWD_TICK = 631
+
+STEERING_CHANNEL = 2
+STEERING_NEUTRAL_TICK = 560
+STEERING_RANGE_TICK = 90
+class ServoMotor:
+    def __init__(self):
+        import Adafruit_PCA9685
+        self.pwm = Adafruit_PCA9685.PCA9685()
+
+    def __enter__(self):
+        self.pwm.set_pwm_freq(FREQUENCY_HZ_REQUEST)
+        self.pwm.set_pwm(THROTTLE_CHANNEL, 0, THROTTLE_NEUTRAL_TICK)
+        self.pwm.set_pwm(STEERING_CHANNEL, 0, STEERING_NEUTRAL_TICK)
+
+    def __exit__(self, type, value, traceback):
+        self.pwm.set_pwm(THROTTLE_CHANNEL, 0, THROTTLE_NEUTRAL_TICK)
+        self.pwm.set_pwm(STEERING_CHANNEL, 0, STEERING_NEUTRAL_TICK)
+
+    def process(self, instructions):
+        throttle_tick = THROTTLE_NEUTRAL_TICK
+        if instructions.throttle > 0.0:
+            throttle_tick = THROTTLE_DEFAULT_FWD_TICK
+
+        steering_tick = int(STEERING_NEUTRAL_TICK + instructions.steering * STEERING_RANGE_TICK)
+
+        # sanity check
+        throttle_tick = util.minmax(throttle_tick, THROTTLE_NEUTRAL_TICK, THROTTLE_DEFAULT_FWD_TICK)
+        steering_tick = util.minmax(steering_tick, STEERING_NEUTRAL_TICK - STEERING_RANGE_TICK, STEERING_NEUTRAL_TICK + STEERING_RANGE_TICK)
+
+        self.pwm.set_pwm(THROTTLE_CHANNEL, 0, throttle_tick)
+        self.pwm.set_pwm(STEERING_CHANNEL, 0, steering_tick)

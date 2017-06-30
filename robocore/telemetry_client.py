@@ -6,12 +6,14 @@ import socket
 import threading
 import websocket
 
+import car_model
 import telemetry_utils
 import util
 
 class TelemetryClient:
     def __init__(self, server):
-        self.server = "ws://%s/api/telemetry" % server
+        self.server = None
+        if server: self.server = "ws://%s/api/telemetry" % server
         self.running = False
 
     def __enter__(self):
@@ -66,8 +68,13 @@ class TelemetryClient:
                 atom["time_delta"] = camera_image.time_delta
                 atom["cross_track_error"] = observation.cross_track_error
                 atom["visible"] = observation.visible
-                atom["left_power"] = instruction.left_power
-                atom["right_power"] = instruction.right_power
+                if isinstance(instruction, car_model.Instruction):
+                    atom["left_power"] = instruction.left_power
+                    atom["right_power"] = instruction.right_power
+                elif isinstance(instruction, car_model.ServoInstruction):
+                    atom["throttle"] = instruction.throttle
+                    atom["steering"] = instruction.steering
+
 
                 out = telemetry_utils.dump_atom(atom)
 

@@ -56,6 +56,9 @@ class PiCamera:
 
     def _run(self):
         with picamera.PiCamera() as camera:
+            if util.isRobocar2():
+                camera.vflip = True  # euler only
+                camera.hflip = True  # euler only
             camera.resolution = self.resolution
             camera.framerate = self.framerate
             time.sleep(0.9)   # camera power on and AWB settle time

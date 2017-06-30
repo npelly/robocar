@@ -45,6 +45,17 @@ class Instruction:
         s += " ***"
         return s
 
+class ServoInstruction:
+    def __init__(self, throttle, steering):
+        """
+        throttle (float) [-1.0, 1.0]
+        steering (float) [-1.0, 1.0]
+        """
+        self.throttle = throttle
+        self.steering = steering
+    def __str__(self):
+        s = "*** %0.4f %0.4f ***" % (self.throttle, self.steering)
+        return s
 
 class RoboCar72v:
     """
@@ -59,15 +70,11 @@ class RoboCar72v:
         # output power delta [-0xFF, 0xFF]
         self.pid = Pid(pid_aggression, 0, pid_aggression * damping)
 
-        self.first_observation = True
-
     def process(self, observation):
-        cross_track_error = observation.cross_track_error
-
         if not observation.visible:
             return Instruction(0x00, 0x00)
 
-        power_delta = self.pid.update(cross_track_error, observation.time_delta)
+        power_delta = self.pid.update(observation.cross_track_error, observation.time_delta)
 
         left_power = min(self.base_power, self.base_power + power_delta)
         right_power = min(self.base_power, self.base_power - power_delta)
@@ -77,3 +84,28 @@ class RoboCar72v:
         right_power = util.minmax(right_power, -0xFF, 0xFF)
 
         return Instruction(left_power, right_power)
+
+class ServoCarTenth:
+    """
+    ARMA 2WD RC chassis, servo steering, ESC, 1/10th scale.
+    """
+    def __init__(self):
+        self.default_speed = 0.01
+
+        pid_aggression = 2.0
+        damping = 0.2
+        # input cross track error [-1.0, +1.0] left <-> right
+        # output direction [-1.0, 1.0]
+        self.pid = Pid(pid_aggression, 0, pid_aggression * damping)
+
+    def process(self, observation):
+        cross_track_error = observation.cross_track_error
+
+        if not observation.visible:
+            return ServoInstruction(throttle=0.0, steering=0.0)
+
+        direction = self.pid.update(observation.cross_track_error, observation.time_delta)
+
+        direction = util.minmax(direction, -1.0, 1.0)
+
+        return ServoInstruction(throttle=self.default_speed, steering=direction)
