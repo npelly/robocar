@@ -12,6 +12,7 @@ Dependencies:
 - PiCamera
 - OpenCV
 - docopt
+- websocket-client
 
 Optional Dependencies:
 - pygame (for manual_drive.py on host)
