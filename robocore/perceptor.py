@@ -10,10 +10,12 @@ class Observation:
         self.visible = visible
         self.time = obs_time
         self.time_delta = obs_time_delta
-
     def __str__(self):
         if not self.visible: return "-----"
         return "%+.4f" % self.cross_track_error
+    def to_telemetry_dict(self):
+        return dict(cross_track_error=self.cross_track_error,
+                    visible=self.visible)
 
 class Perceptor:
     def __init__(self, resolution):

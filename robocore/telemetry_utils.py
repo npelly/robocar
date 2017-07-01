@@ -1,13 +1,11 @@
 """
-Each Telemetry Session is a dictionary.
-Mandatory keys
+A Telemetry Session is a dictionary, with mandatory keys:
 "name":         (str) terse name, suitable for filenames etc
 "description":  (str) verbose human readable description
 "start_time":   (float) start time in seconds since epoch
 "atoms":        (list(dict)) zero or more Telemetry Atoms
 
-Each Telemetry Atom is also a dictionary.
-Mandatory keys
+A Telemetry Atom is also a dictionary, with mandatory keys:
 "time"          (float) local time in seconds
 "image"         (bytearray/str) JPEG image
 

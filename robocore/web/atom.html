@@ -7,7 +7,7 @@
 
 <b>@{{ atom["time"] }}</b><br>
 
-{% for k, v in atom.iteritems() %}
+{% for k, v in sorted(atom.iteritems()) %}
   {% if k.startswith(".") or k == "image" or k == "time" %}
     {% continue %}
   {% end %}

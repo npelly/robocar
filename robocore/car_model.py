@@ -44,6 +44,8 @@ class Instruction:
                 s += "%c%02X%c" % (flag, abs(power), flag)
         s += " ***"
         return s
+    def to_telemetry_dict(self):
+        return self.__dict__
 
 class ServoInstruction:
     def __init__(self, throttle, steering):
@@ -56,6 +58,8 @@ class ServoInstruction:
     def __str__(self):
         s = "*** %0.4f %0.4f ***" % (self.throttle, self.steering)
         return s
+    def to_telemetry_dict(self):
+        return self.__dict__
 
 class RoboCar72v:
     """

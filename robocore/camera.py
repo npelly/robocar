@@ -29,6 +29,9 @@ class CameraImage:
         (y, x, c) = self.image.shape
         return "%dx%dx%d@%.3f" % (x, y, c, self.time)
 
+    def to_telemetry_dict(self):
+        return dict(time_delta=self.time_delta)
+
 class UdpSink:
     # Receive with
     # /Applications/VLC.app/Contents/MacOS/VLC --demux h264 udp://:8002

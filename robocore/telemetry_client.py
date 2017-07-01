@@ -27,12 +27,12 @@ class TelemetryClient:
         if not self.running: return
 
         self.running = False
-        self.queue.put((None, None, None))  # unblock thread
+        self.queue.put((None, None))  # unblock thread
 
-    def process(self, camera_image, observation, instruction):
+    def process(self, camera_image, *objects):
         if not self.running: return
 
-        self.queue.put((camera_image, observation, instruction))
+        self.queue.put((camera_image, objects))
 
     def _run(self):
         try:
@@ -48,7 +48,7 @@ class TelemetryClient:
         profiler = util.SectionProfiler()
 
         while self.running:
-            camera_image, observation, instruction = self.queue.get()
+            camera_image, objects = self.queue.get()
 
             if not self.running: break
 
@@ -56,25 +56,16 @@ class TelemetryClient:
                 print "WARNING: telemetry is %d frames behind" % self.queue.qsize()
 
             with profiler:
-                time = camera_image.time
-
                 # camera_image.image is numpy.ndarray, dtype=uint8
                 pil_image = PIL.Image.fromarray(camera_image.image)
                 image_io = io.BytesIO()
                 pil_image.save(image_io, format='jpeg')
                 image = image_io.getvalue()  # bytearray
 
-                atom = telemetry_utils.create_atom(time, image)
-                atom["time_delta"] = camera_image.time_delta
-                atom["cross_track_error"] = observation.cross_track_error
-                atom["visible"] = observation.visible
-                if isinstance(instruction, car_model.Instruction):
-                    atom["left_power"] = instruction.left_power
-                    atom["right_power"] = instruction.right_power
-                elif isinstance(instruction, car_model.ServoInstruction):
-                    atom["throttle"] = instruction.throttle
-                    atom["steering"] = instruction.steering
+                atom = telemetry_utils.create_atom(camera_image.time, image)
 
+                for obj in (camera_image,) + objects:
+                    atom.update(obj.to_telemetry_dict())
 
                 out = telemetry_utils.dump_atom(atom)
 
