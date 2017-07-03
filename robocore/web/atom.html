@@ -1,6 +1,6 @@
 <img
   class="camera"
-  src="/session/{{ session[".id"] }}/image/{{ atom_id }}"
+  src="/session/{{ session["__id"] }}/image/{{ atom_id }}"
   onclick="imageClick(this)"
   style="cursor:pointer;"
   />
@@ -8,7 +8,7 @@
 <b>@{{ atom["time"] }}</b><br>
 
 {% for k, v in sorted(atom.iteritems()) %}
-  {% if k.startswith(".") or k == "image" or k == "time" %}
+  {% if k.startswith("_") or k == "image" or k == "time" %}
     {% continue %}
   {% end %}
   {{ k }}: {{ v }}<br>

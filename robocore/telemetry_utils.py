@@ -9,7 +9,8 @@ A Telemetry Atom is also a dictionary, with mandatory keys:
 "time"          (float) local time in seconds
 "image"         (bytearray/str) JPEG image
 
-Any key beginning with "." is considered hidden and not serialized.
+Any key beginning with "_" is hidden (serialized, but not displayed)
+Any key beginning with "__" is private (not serialized or displayed)
 """
 
 import copy
@@ -88,7 +89,7 @@ def create_atom(time, image):
 
 def strip(items):
     """
-    Return a copy of atom or session with hidden key-value pairs stripped,
+    Return a copy of atom or session with private key-value pairs stripped,
     or return the original if no stripping required.
     Nested containers (only list, tuple, set & dict) are checked recursively.
     """
@@ -97,7 +98,7 @@ def strip(items):
 
 def _strip(items):
     """
-    Return a copy of items with hidden key-value pairs stripped, or None if
+    Return a copy of items with private key-value pairs stripped, or None if
     there are none. Nested containers (only list, tuple, set & dict)
     are checked recursively.
     """
@@ -114,7 +115,7 @@ def _strip(items):
                     result.add(s_item)
     elif isinstance(items, dict):
         for k, item in items.iteritems():
-            if isinstance(k, str) and k.startswith("."):
+            if isinstance(k, str) and k.startswith("__"):
                 if result is None: result = copy.copy(items)
                 result.pop(k)
             else:
@@ -126,11 +127,11 @@ def _strip(items):
 
 if __name__ == "__main__":
     atom = create_atom(time.time(), b"123")
-    atom[".hidden"] = "value"
+    atom["__hidden"] = "value"
     print atom
     print load_atom(dump_atom(atom))
 
     session = create_session(atoms=[atom])
-    session[".hidden"] = "value"
+    session["__hidden"] = "value"
     print session
     print load_session(dump_session(session))

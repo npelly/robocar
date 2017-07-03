@@ -10,33 +10,24 @@ class Observation:
         self.visible = visible
         self.time = obs_time
         self.time_delta = obs_time_delta
+
     def __str__(self):
         if not self.visible: return "-----"
         return "%+.4f" % self.cross_track_error
-    def to_telemetry_dict(self):
-        return dict(cross_track_error=self.cross_track_error,
-                    visible=self.visible)
 
-class Perceptor:
-    def __init__(self, resolution):
-        (self.X, self.Y) = resolution
+class BluePixelPerception:
+    def __init__(self, config):
+        config = config["Camera"]
+        self.X = config.getint("RESOLUTION_WIDTH")
+        self.Y = config.getint("RESOLUTION_HEIGHT")
+
         self.weights = self._create_weights(self.Y, self.X, 0.2)
 
-    def process(self, camera_image, show=False):
+    def process(self, camera_image, telemetry):
         image = camera_image.image
     #    image = cv2.cvtColor(image, cv2.COLOR_YUV420p2RGB)
 
-        if show:
-            cv2.imshow('perception', image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-
         image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        if show:
-            cv2.imshow('perception', image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
 
         lower_blue = numpy.array([90,150,50])
         upper_blue = numpy.array([130,255,255])
@@ -45,14 +36,10 @@ class Perceptor:
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        if show:
-            cv2.imshow('perception', image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-
         error, visible = self._cross_track_error(image)
 
-        return Observation(error, visible, camera_image.time, camera_image.time_delta)
+        observation = Observation(error, visible, camera_image.time, camera_image.time_delta)
+        return observation
 
     """
     distance_weight is the weight of pixels at y=0 compared to weight at y=Y

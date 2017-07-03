@@ -6,14 +6,15 @@ import socket
 import threading
 import websocket
 
-import car_model
+import vehicle_dynamics
 import telemetry_utils
 import util
 
 class TelemetryClient:
-    def __init__(self, server):
+    def __init__(self, server, config_contents):
         self.server = None
         if server: self.server = "ws://%s/api/telemetry" % server
+        self.config_contents = config_contents
         self.running = False
 
     def __enter__(self):
@@ -27,12 +28,12 @@ class TelemetryClient:
         if not self.running: return
 
         self.running = False
-        self.queue.put((None, None))  # unblock thread
+        self.queue.put((None, None, None))  # unblock thread
 
-    def process(self, camera_image, *objects):
+    def process_async(self, time, image, telemetry):
         if not self.running: return
 
-        self.queue.put((camera_image, objects))
+        self.queue.put((time, image, telemetry))
 
     def _run(self):
         try:
@@ -43,12 +44,14 @@ class TelemetryClient:
             return
 
         session = telemetry_utils.create_session()
+        session["config"] = self.config_contents
         web_socket.send_binary(telemetry_utils.dump_session(session))
+        self.config_contents = None  # allow GC
 
         profiler = util.SectionProfiler()
 
         while self.running:
-            camera_image, objects = self.queue.get()
+            time, image, telemetry = self.queue.get()
 
             if not self.running: break
 
@@ -57,16 +60,14 @@ class TelemetryClient:
 
             with profiler:
                 # camera_image.image is numpy.ndarray, dtype=uint8
-                pil_image = PIL.Image.fromarray(camera_image.image)
+                #TODO fix colors
+                pil_image = PIL.Image.fromarray(image)
                 image_io = io.BytesIO()
                 pil_image.save(image_io, format='jpeg')
-                image = image_io.getvalue()  # bytearray
+                jpeg_image = image_io.getvalue()  # bytearray
 
-                atom = telemetry_utils.create_atom(camera_image.time, image)
-
-                for obj in (camera_image,) + objects:
-                    atom.update(obj.to_telemetry_dict())
-
+                atom = telemetry_utils.create_atom(time, jpeg_image)
+                atom.update(telemetry)
                 out = telemetry_utils.dump_atom(atom)
 
                 web_socket.send_binary(out)

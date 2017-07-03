@@ -1,3 +1,10 @@
 <h2> Session {{ session["description"] }} </h2>
 
-<script>var session_id = {{ session[".id"] }}; var atom_id = -1;</script>
+{% for k, v in sorted(session.iteritems()) %}
+  {% if k.startswith("_") or k in ["description", "atoms", "start_time"] %}
+    {% continue %}
+  {% end %}
+  {{ k }}: <pre>{{ v }}</pre><br>
+{% end %}
+
+<script>var session_id = {{ session["__id"] }}; var atom_id = -1;</script>

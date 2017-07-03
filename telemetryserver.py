@@ -1,4 +1,4 @@
-"""Telemetry Server.
+"_id""""Telemetry Server.
 
 Robocars push telemetry data to this server, and users can view that data.
 
@@ -85,7 +85,7 @@ class LiveMoreHandler(BaseHandler):
         except (ValueError, TypeError):
             raise tornado.web.HTTPError(400, "invalid session_id or atom_id parameter")
 
-        if session_id in xrange(len(self.server.sessions)) and self.server.sessions[session_id].get(".live", False):
+        if session_id in xrange(len(self.server.sessions)) and self.server.sessions[session_id].get("__live", False):
             # current session is live, look for new atoms
             session = self.server.sessions[session_id]
             atom_id += 1
@@ -106,7 +106,7 @@ class LiveMoreHandler(BaseHandler):
             # look for live session
             session_id +=1
             for id, session in list(enumerate(self.server.sessions))[session_id:]:
-                if session.get(".live", False):
+                if session.get("__live", False):
                     session_id = id
             else:  # no live sessions, wait for one
                 session_id = yield self.server.wait_for_session()
@@ -116,109 +116,6 @@ class LiveMoreHandler(BaseHandler):
             for id, atom in session["atoms"]:
                 self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
         self.finish()
-
-"""
-class AtomHandler(tornado.web.RequestHandler):
-    def initialize(self, telemetry_server):
-        self.telemetry_server = telemetry_server
-
-    @tornado.gen.coroutine
-    def get(self, session_id=None, atom_id=None):
-        session_id = int(session_id)
-        atom_id = int(atom_id)
-        try:
-            session = self.telemetry_server.sessions[session_id]
-            if atom_id >= len(session["atoms"]):
-                yield self.telemetry_server.wait_for_atom(session_id, atom_id)
-            self.render("session_atom.html", session=session, atom_id=atom_id)
-        except KeyError:
-            raise tornado.web.HTTPError(404, "Bad Session ID")
-
-class NewSessionHandler(tornado.web.RequestHandler):
-    def initialize(self, telemetry_server):
-        self.telemetry_server = telemetry_server
-
-    @tornado.gen.coroutine
-    def get(self):
-        session_id = yield self.telemetry_server.wait_for_session()
-        session = self.telemetry_server.sessions[session_id]
-        self.render("session_list_item.html", session=session)
-
-class LiveSessionHandler(tornado.web.RequestHandler):
-    def initialize(self, telemetry_server):
-        self.telemetry_server = telemetry_server
-
-    @tornado.gen.coroutine
-    def get(self):
-        (session_id, atom_id) yield self.telemetry_server.wait_for_atom()
-        session = self.telemetry_server.sessions[session_id]
-        self.render("session_atom.html", session=session, atom_id=atom_id)
-
-class SessionHandler(tornado.web.RequestHandler):
-    def initialize(self, server):
-        self.server = server
-
-    def get(self, session_id=None):
-        session_id = int(session_id)
-        try:
-            session = self.server.sessions[session_id]
-            self.render("session.html", session=session)
-        except KeyError:
-            raise tornado.web.HTTPError(404, "invalid session_id")
-
-class LiveHandler(tornado.web.RequestHandler):
-    def initialize(self, server):
-        self.server = server
-
-    def get(self):
-        if self.server.live_session_id is not None:  #TODO: else
-            try:
-                session = self.server.sessions[self.server.live_session_id]
-                self.render("session.html", session=session)
-            except KeyError:
-                raise tornado.web.HTTPError(404, "invalid session_id")
-
-class LiveHandler(tornado.web.RequestHandler):
-    def initialize(self, server):
-        self.server = server
-
-    def get(self, session_id=None, atom_id=None):
-        session_id = int(session_id)
-        atom_id = int(atom_id)
-
-        for s_id in xrange(max(session_id, 0), len(self.server.sessions)):
-            if s_id == session_id:  # send partial update
-                start_atom_id = atom_id
-            else:                  # send full page
-                start_atom_id = -1
-                # render HEADER
-            for a_id in xrange(start_atom_id, )
-
-
-
-
-        if session_id < len(self.server.sessions):
-            # full sessions to update
-
-        # if no session_id then wait/return new session
-        # if closed session then wait/return new session
-        if session_id in xrange(len(self.server.sessions)) and self.server.sessions[session_id][".live"]:
-            # live session
-            session = self.server.sessions[session_id]
-            if atom_id < len(session["atoms"]):
-                # atoms to return immediately
-            else:
-                # wait for atoms or closure
-
-
-
-        if session_id <  or not self.sessions[session_id][".live"]
-
-
-        # else live session
-            # wait/return new atoms or close
-"""
-
 
 class TelemetryHandler(tornado.websocket.WebSocketHandler):
     def initialize(self, server):
@@ -289,14 +186,14 @@ class TelemetryServer:
         sessions = load_telemetry_directory(path)
         self.sessions = sorted(sessions, key=lambda k: k["name"])
         for i, session in enumerate(self.sessions):
-            self.sessions[i][".id"] = i
+            self.sessions[i]["__id"] = i
 
         self.session_futures = set()
 
     def register_session(self, session):
         id = len(self.sessions)
-        session[".id"] = id
-        session[".live"] = True
+        session["__id"] = id
+        session["__live"] = True
         self.sessions.append(session)
 
         for future in self.session_futures:
@@ -311,7 +208,7 @@ class TelemetryServer:
             future.set_result([])
 
     def close_session(self, session_id):
-        self.sessions[session_id].pop(".live")
+        self.sessions[session_id].pop("__live")
         for future in self.sessions[session_id].pop(".futures", set()):
             future.set_result([])
         save_telemetry(self.path, self.sessions[session_id])
@@ -330,54 +227,6 @@ class TelemetryServer:
         self.sessions[session_id].setdefault(".futures", set())
         self.sessions[session_id][".futures"].add(future)
         return future
-
-"""
-    def wait_for_atom(self, session_id, atom_id):
-        result_future = tornado.concurrent.Future()
-        self.waiters.setdefault(session_id, {})
-        self.waiters[session_id].setdefault(atom_id, [])
-        self.waiters[session_id][atom_id].append(result_future)
-        return result_future
-
-    def wait_for_atom(self):  # any atom
-        result_future = tornado.concurrent.Future()
-        self.waiters.setdefault(0, [])
-        self.waiters[0].append(result_future)
-        return result_future
-
-
-    def new_session(self, session):
-        session = self._create_dict_session(session, [])
-        session_id = session["id"]
-        self.sessions[session_id] = session
-
-        while len(self.new_session_waiters) > 0:
-            self.new_session_waiters.pop().set_result(session_id)
-
-        return session_id
-
-    def new_atom(self, session_id, atom):
-        session = self.sessions[session_id]
-        atoms = session["atoms"]
-        atom_id = len(atoms)
-        atoms.append(atom)
-
-        try:
-            futures = self.waiters[session_id].pop(atom_id)
-            for future in futures:
-                future.set_result([])   #TODO clear futures in cleanup paths
-        except KeyError:
-            pass
-
-        try:
-            futures = self.waiters[0]
-            for future in futures:
-                future.set_result((session_id, atom_id))   #TODO clear futures in cleanup paths
-        except KeyError:
-            pass
-
-        return atom_id
-"""
 
 if __name__ == "__main__":
     args = docopt.docopt(__doc__)

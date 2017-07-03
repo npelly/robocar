@@ -1,8 +1,8 @@
 <div>
-  <a href="/session/{{ session[".id"] }}">
+  <a href="/session/{{ session["__id"] }}">
   {{ session["description"] }}
 	</a>
   <script>
-    var session_id = {{ session[".id"] }};
+    var session_id = {{ session["__id"] }};
   </script>
 </div>
