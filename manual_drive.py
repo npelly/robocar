@@ -2,8 +2,9 @@ import pygame
 import sys
 import time
 
-import robocore.motor
-import robocore.car_model
+import robocore.actuators
+import robocore.vehicle_dynamics
+
 
 FAST = 0xFF
 SLOW = 0xB0
@@ -25,12 +26,9 @@ windowSurface.blit(text, (0, 0))
 # draw the window onto the screen
 pygame.display.update()
 
-if robocore.util.isRaspberryPi():
-    motor = robocore.motor.ArduinoSerialMotor()
-else:
-    motor = robocore.motor.DummyMotor()
+actuator = robocore.actuators.DualMotorArduinoController(None)
 
-with motor:
+with actuator:
     prev_left_power = 0x00
     prev_right_power = 0x00
     running = True
@@ -58,8 +56,8 @@ with motor:
             left_power = FAST
 
         if prev_left_power != left_power or prev_right_power != right_power:
-            instruction = robocore.car_model.Instruction(left_power, right_power)
-            motor.process(instruction)
+            instruction = robocore.vehicle_dynamics.DualMotorInstruction(left_power, right_power)
+            actuator.process(instruction, None)
             print instruction
         prev_left_power = left_power
         prev_right_power = right_power
