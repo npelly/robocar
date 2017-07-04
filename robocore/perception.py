@@ -4,52 +4,65 @@ import numpy
 import time
 import os
 
+import images
+
+"""
+cross_track_error (float) [-1.0, +1.0]
+visible           (boolean)
+time              (float) local time of this observation
+time_delta        (float) time delta since previous visible=true observation
+"""
 class Observation:
-    def __init__(self, cross_track_error, visible, obs_time, obs_time_delta):
+    def __init__(self, cross_track_error, visible, time, time_delta):
         self.cross_track_error = cross_track_error
         self.visible = visible
-        self.time = obs_time
-        self.time_delta = obs_time_delta
+        self.time = time
+        self.time_delta = time_delta
 
     def __str__(self):
-        if not self.visible: return "-----"
-        return "%+.4f" % self.cross_track_error
+        if not self.visible: return "------"
+        return "%+.3f" % self.cross_track_error
 
-class BluePixelPerception:
+"""
+1) HSV filter image to find a color of interest
+2) Apply weight matrix and sum to find cross track error
+
+If there is a single pixel of interest in bottom left, cross track error is -1.0
+If there is a single pixel of interest in bottom right, cross track error is +1.0
+etc
+"""
+class FilterAndWeighPixelPerception:
     def __init__(self, config):
-        config = config["Camera"]
-        self.X = config.getint("RESOLUTION_WIDTH")
-        self.Y = config.getint("RESOLUTION_HEIGHT")
+        self.X = config["Camera"].getint("RESOLUTION_WIDTH")
+        self.Y = config["Camera"].getint("RESOLUTION_HEIGHT")
+        self.N = self.X * self.Y
 
-        self.weights = self._create_weights(self.Y, self.X, 0.2)
+        config = config["Perception"]
+        Y_TOP_WEIGHT = config.getfloat("Y_TOP_WEIGHT")
+        Y_BOT_WEIGHT = config.getfloat("Y_BOT_WEIGHT")
+        lower, upper = eval(config.get("HSV_FILTER"))
+        self.HSV_FILTER_LOWER = numpy.array(lower)
+        self.HSV_FILTER_UPPER = numpy.array(upper)
+        self.VISIBLE_THRESHOLD = config.getfloat("VISIBLE_THRESHOLD")
 
-    def process(self, camera_image, telemetry):
-        image = camera_image.image
-    #    image = cv2.cvtColor(image, cv2.COLOR_YUV420p2RGB)
+        self.WEIGHTS = self._create_weight_matrix(self.Y, self.X, Y_TOP_WEIGHT, Y_BOT_WEIGHT)
 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        lower_blue = numpy.array([90,150,50])
-        upper_blue = numpy.array([130,255,255])
-        mask = cv2.inRange(image, lower_blue, upper_blue)
-        image = cv2.bitwise_and(image, image, mask = mask)
-
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        error, visible = self._cross_track_error(image)
-
-        observation = Observation(error, visible, camera_image.time, camera_image.time_delta)
-        return observation
+        self.last_visible_time = 0.0
 
     """
-    distance_weight is the weight of pixels at y=0 compared to weight at y=Y
+    Create weights array:
+        -w ... 0 ... +w
+           ...   ...
+        -1 ... 0 ... +1
+    Where w is y_0_weight
     """
-    def _create_weights(self, Y, X, distance_weight):
+    def _create_weight_matrix(self, Y, X, y_0_weight, y_Y_weight):
         weights = numpy.empty([Y, X])
-        (y_start, y_delta) = self._create_linear_weights(distance_weight, Y)
+        y_start = y_0_weight
+        y_delta = (y_Y_weight - y_start) / (Y - 1)
 
         for x in xrange(X):
-            x_weight = float(x) / float(X/2) - 1.0
+            x_weight = 2.0 * x / (X - 1) - 1.0  # -1.0 ... +1.0
             w = y_start * x_weight
             delta = y_delta * x_weight
             for y in xrange(Y):
@@ -57,25 +70,25 @@ class BluePixelPerception:
                 w += delta
         return weights
 
-    """
-    Calculate linear progression of n floats that sum to 1, and
-    first number / last number is a.
-    """
-    def _create_linear_weights(self, a, n):
-    #    end = 2.0 / n / (1.0 + a)
-    #    start = a * end
-    #    delta = end * (1.0 - a) / (n - 1.0)
-        return (a, (1.0 - a) / (n - 1.0))
+    def process(self, image, telemetry):
+        hsv_image = cv2.cvtColor(image.data, cv2.COLOR_BGR2HSV)
 
+        filtered_image = cv2.inRange(hsv_image, self.HSV_FILTER_LOWER, self.HSV_FILTER_UPPER)
+        # image: single channel with each pixel 0 or 255
 
-    def _cross_track_error(self, image):
-        #target_region = image[int(Y*0.2):Y, :]
-        target_region = image
+        telemetry["filtered_image"] = images.NumpyImage(filtered_image, 0.0, 0.0)
 
-        target_sum = numpy.sum(target_region)
-        if target_sum < 10000:
-            return (0, False)
-        #print target_sum
-    #    print numpy.sum(target_region * WEIGHTS)
-        pixel_error = numpy.sum(target_region * self.weights) / target_sum
-        return (pixel_error, True)
+        filtered_pixel_count = numpy.sum(filtered_image) / 255
+        filtered_pixel_ratio = float(filtered_pixel_count) / self.N
+        telemetry["filtered_pixel_count"] = filtered_pixel_count
+        telemetry["filtered_pixel_ratio"] = filtered_pixel_ratio
+        if filtered_pixel_ratio < self.VISIBLE_THRESHOLD:
+            return Observation(0.0, False, image.time, 0.0)
+
+        cross_track_error = numpy.sum(filtered_image * self.WEIGHTS) / 255 / filtered_pixel_count
+        if self.last_visible_time == 0.0:  # first visible
+            time_delta = 0.0
+        else:
+            time_delta = image.time - self.last_visible_time
+        self.last_visible_time = image.time
+        return Observation(cross_track_error, True, image.time, time_delta)

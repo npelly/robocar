@@ -12,19 +12,9 @@ import cv2
 import argparse
 import socket
 
+import images
 import telemetry_utils
 import util
-
-class CameraImage:
-    def __init__(self, image, image_time, image_time_delta):
-        self.image = image
-        self.time = image_time
-        self.time_delta = image_time_delta
-    def __str__(self):
-        (y, x, c) = self.image.shape
-        return "%dx%dx%d@%.3f" % (x, y, c, self.time)
-    def to_telemetry_dict(self):
-        return dict(time_delta=self.time_delta)
 
 """
 Base class to manage Camera thread.
@@ -49,8 +39,9 @@ class CameraBase:
     def wait_for_next_image(self, break_func):
         while not break_func():
             try:
-                camera_image = self.queue.get(block=True, timeout=1.1)
-                return camera_image, dict(time_delta=camera_image.time_delta)
+                image = self.queue.get(block=True, timeout=1.1)
+                if not image: break
+                return image, telemetry_utils.create_atom(image)
             except Queue.Empty:
                 print "warning: delayed camera image"
                 continue
@@ -59,6 +50,7 @@ class CameraBase:
 class PiCamera(CameraBase):
     def __init__(self, config):
         try:
+            global picamera
             import picamera
             import picamera.array
         except ImportError:
@@ -73,7 +65,7 @@ class PiCamera(CameraBase):
                 camera.hflip = True
             camera.resolution = self.RESOLUTION
             camera.framerate = self.FRAMERATE
-            time.sleep(0.9)   # camera power on and AWB settle time
+            time.sleep(1.4)   # camera power on and AWB settle time
 
             image_timing = util.LoopProfiler()
 
@@ -84,11 +76,9 @@ class PiCamera(CameraBase):
                     delta_time, cumulative_time = image_timing.time()
 
                     if self.cancel: break
-
-                    image = rawCapture.array
-
                     if not self.queue.empty: self.queue.get_nowait()  # clear queue
-                    self.queue.put(CameraImage(image, cumulative_time, delta_time))
+
+                    self.queue.put(images.NumpyImage(rawCapture.array, cumulative_time, delta_time))
 
                     rawCapture.truncate(0)
 
@@ -112,10 +102,10 @@ class DummyCamera(CameraBase):
 
             draw.rectangle([(1, 20), self.RESOLUTION], fill=(0, 0, 0))
             draw.text((1, 20), str(cumulative_time), font=fnt, fill=(255, 255, 255))
-            image = numpy.asarray(pil_image)
+            data = numpy.asarray(pil_image)
 
             if not self.queue.empty: self.queue.get_nowait()  # clear queue
-            self.queue.put(CameraImage(image, cumulative_time, delta_time))
+            self.queue.put(images.NumpyImage(data, cumulative_time, delta_time))
 
         print "Camera image timing:", loop_profiler
 
@@ -134,16 +124,9 @@ class ReplayCamera(CameraBase):
     def worker_thread(self):
         if not self.telemetry_session: return
 
-        for atom in self.telemetry_session["atoms"]:
+        for atom in self.telemetry_session["_atoms"]:
             if self.cancel: break
 
-            image = atom["image"]
-            image_io = io.BytesIO(image)
-            pil_image = PIL.Image.open(image_io)
-            image_array = numpy.array(pil_image)
+            self.queue.put(atom["image"].to_numpy_image())  # will block until queue ready
 
-            camera_image = CameraImage(image_array, atom["time"], atom["time_delta"])
-
-            if self.cancel: break
-
-            self.queue.put(camera_image)  # will block until queue ready
+        self.queue.put(None)

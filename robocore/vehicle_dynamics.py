@@ -48,8 +48,8 @@ class DifferentialSteeringVehicle:
         power_delta, pid_debug = self.pid.update(observation.cross_track_error, observation.time_delta)
         telemetry["pid_debug"] = pid_debug
 
-        left_power = min(self.base_power, self.base_power + power_delta)
-        right_power = min(self.base_power, self.base_power - power_delta)
+        left_power = min(self.BASE_POWER, self.BASE_POWER + power_delta)
+        right_power = min(self.BASE_POWER, self.BASE_POWER - power_delta)
 
         # sanity check
         left_power = util.minmax(left_power, -0xFF, 0xFF)

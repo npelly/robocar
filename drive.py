@@ -57,12 +57,12 @@ if __name__ == "__main__":
 
     with camera, actuator, telemetry_client:
         while not robocore.util.check_stdin():
-            camera_image, telemetry = camera.wait_for_next_image(break_func=robocore.util.check_stdin)
-            if robocore.util.check_stdin(): break
-            telemetry["camera_image"] = str(camera_image)
+            image, telemetry = camera.wait_for_next_image(break_func=robocore.util.check_stdin)
+            telemetry["image_desc"] = str(image)
+            if not image or robocore.util.check_stdin(): break
 
             with perception_profiler:
-                observation = perception.process(camera_image, telemetry)
+                observation = perception.process(image, telemetry)
                 telemetry["observation"] = str(observation)
 
             with vehicle_profiler:
@@ -70,9 +70,9 @@ if __name__ == "__main__":
                 actuator.process(instruction, telemetry)
                 telemetry["instruction"] = str(instruction)
 
-            print camera_image, observation, instruction
+            print image, observation, instruction
 
-            telemetry_client.process_async(camera_image.time, camera_image.image, telemetry)
+            telemetry_client.process_async(telemetry)
 
     print "Perception processing:", perception_profiler
     print "Vehicle processing:", vehicle_profiler

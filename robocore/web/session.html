@@ -2,7 +2,7 @@
 {% block content %}
 	{% include session_header.html %}
 
-	{% for atom_id, atom in enumerate(session["atoms"]) %}
+	{% for atom_id, atom in enumerate(session["_atoms"]) %}
 		{% include atom.html %}
 	{% end %}
 {% end %}

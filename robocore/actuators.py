@@ -59,13 +59,13 @@ class DualMotorArduinoController:
     def _send(self, command):
         if not self.serial: return
         self.serial.write(command)
-        if DEBUG: print ">", command,
+        if self.DEBUG: print ">", command,
 
     def _read(self):
         try:
             while self.serial:
                 input = self.serial.readline()
-                if input and DEBUG: print "<", input,
+                if input and self.DEBUG: print "<", input,
         except (OSError, select.error, TypeError):
             pass
 

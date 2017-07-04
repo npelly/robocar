@@ -15,25 +15,20 @@ class TelemetryClient:
         self.server = None
         if server: self.server = "ws://%s/api/telemetry" % server
         self.config_contents = config_contents
-        self.running = False
+        self.close = False
+        self.queue = Queue.Queue()
 
     def __enter__(self):
         if not self.server: return
-
-        self.queue = Queue.Queue()
-        self.running = True
         threading.Thread(target=self._run).start()
 
     def __exit__(self, type, value, traceback):
-        if not self.running: return
+        self.close = True
 
-        self.running = False
-        self.queue.put((None, None, None))  # unblock thread
-
-    def process_async(self, time, image, telemetry):
-        if not self.running: return
-
-        self.queue.put((time, image, telemetry))
+    def process_async(self, telemetry):
+        if not self.server: return
+        telemetry_utils.compress_atom(telemetry)  # compress immediately to free image buffer
+        self.queue.put(telemetry)
 
     def _run(self):
         try:
@@ -50,25 +45,19 @@ class TelemetryClient:
 
         profiler = util.SectionProfiler()
 
-        while self.running:
-            time, image, telemetry = self.queue.get()
-
-            if not self.running: break
+        while not self.close or self.queue.qsize() > 0 :
+            try:
+                telemetry = self.queue.get(timeout=1.0)
+            except Queue.Empty:
+                continue
 
             if self.queue.qsize() > 10:
                 print "WARNING: telemetry is %d frames behind" % self.queue.qsize()
 
             with profiler:
-                # camera_image.image is numpy.ndarray, dtype=uint8
-                #TODO fix colors
-                pil_image = PIL.Image.fromarray(image)
-                image_io = io.BytesIO()
-                pil_image.save(image_io, format='jpeg')
-                jpeg_image = image_io.getvalue()  # bytearray
+                #telemetry_utils.compress_atom(telemetry)
 
-                atom = telemetry_utils.create_atom(time, jpeg_image)
-                atom.update(telemetry)
-                out = telemetry_utils.dump_atom(atom)
+                out = telemetry_utils.dump_atom(telemetry)
 
                 web_socket.send_binary(out)
 

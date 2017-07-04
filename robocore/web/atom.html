@@ -1,17 +1,19 @@
-<img
-  class="camera"
-  src="/session/{{ session["__id"] }}/image/{{ atom_id }}"
-  onclick="imageClick(this)"
-  style="cursor:pointer;"
-  />
+<b>@{{ atom["image"].time }}</b><br>
 
-<b>@{{ atom["time"] }}</b><br>
+{% import robocore.images %}
 
-{% for k, v in sorted(atom.iteritems()) %}
-  {% if k.startswith("_") or k == "image" or k == "time" %}
-    {% continue %}
+{% for k, v in atom.iteritems() %}
+  {% if isinstance(v, robocore.images.JpegImage) and not k.startswith("_")  %}
+    {% set image_name = k %}
+    {% set image = v %}
+    {% include image.html %}
   {% end %}
-  {{ k }}: {{ v }}<br>
+{% end %}
+
+{% for k, v in atom.iteritems() %}
+  {% if not isinstance(v, robocore.images.JpegImage) and not k.startswith("_")  %}
+    {{ k }} : {{ v }}<br>
+  {% end %}
 {% end %}
 
 <script>var atom_id = {{ atom_id }};</script>

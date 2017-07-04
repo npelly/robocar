@@ -18,6 +18,6 @@ class Pid:
 
         pid = p + i + d
 
-        pid_debug = "P=%.3f I=%.3f D=%.3f t=%.3f PID=%.3f" % (p, i, d, error_time_delta, pid)
+        pid_debug = "P=%.3f I=%.3f D=%.3f t=%.3f PID=%.3f" % (p, i, d, time_delta, pid)
 
         return pid, pid_debug

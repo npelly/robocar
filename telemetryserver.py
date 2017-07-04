@@ -60,13 +60,14 @@ class SessionHandler(BaseHandler):
         self.render("session.html", session=session)
 
 class ImageHandler(BaseHandler):
-    def get(self, session_id=None, atom_id=None):
+    def get(self, session_id=None, atom_id=None, image_name=None):
         try:
             session_id = int(session_id)
             atom_id = int(atom_id)
-            image = self.server.sessions[session_id]["atoms"][atom_id]["image"]
+            image_name = str(image_name)
+            image = self.server.sessions[session_id]["_atoms"][atom_id][image_name].data
         except (IndexError, ValueError, TypeError):
-            raise tornado.web.HTTPError(404, "invalid session_id (%s) or atom_id (%s)" % (str(session_id), str(atom_id)))
+            raise tornado.web.HTTPError(404, "invalid session_id (%s) or atom_id (%s) or image_name (%s)" % (str(session_id), str(atom_id), image_name))
         self.set_header("Content-type", "image/jpeg")
         self.set_header("Content-length", len(image))
         self.write(image)
@@ -89,16 +90,16 @@ class LiveMoreHandler(BaseHandler):
             # current session is live, look for new atoms
             session = self.server.sessions[session_id]
             atom_id += 1
-            if atom_id >= len(session["atoms"]):
+            if atom_id >= len(session["_atoms"]):
                 yield self.server.wait_for_atom(session_id)
-            for id, atom in list(enumerate(session["atoms"]))[atom_id:]:
+            for id, atom in list(enumerate(session["_atoms"]))[atom_id:]:
                 self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
         elif session_id in xrange(len(self.server.sessions)):
             # session_id is valid, but session is no longer live
             session = self.server.sessions[session_id]
             # send remaining atoms
             atom_id += 1
-            for id, atom in list(enumerate(session["atoms"]))[atom_id:]:
+            for id, atom in list(enumerate(session["_atoms"]))[atom_id:]:
                 self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
             # tell client to search a new session
             self.write("<script>var session_id = -1; var atom_id = -1;</script>")
@@ -113,7 +114,7 @@ class LiveMoreHandler(BaseHandler):
             # session_id now live
             session = self.server.sessions[session_id]
             self.render_without_finish("session_header.html", session=session)
-            for id, atom in session["atoms"]:
+            for id, atom in session["_atoms"]:
                 self.render_without_finish("atom.html", session=session, atom_id=id, atom=atom)
         self.finish()
 
@@ -156,7 +157,7 @@ def load_telemetry_directory(path):
         for filename in os.listdir(path):
             filepath = os.path.join(path, filename)
             try:
-                if os.path.isfile(filepath) and filepath.endswith(".robo"):
+                if os.path.isfile(filepath) and filepath.endswith(".telemetry"):
                     with io.open(filepath, 'rb') as file:
                         sessions.append(robocore.telemetry_utils.load_session(file))
             except (OSError, IOError, AssertionError):
@@ -168,7 +169,7 @@ def load_telemetry_directory(path):
 
 def save_telemetry(path, session):
     try:
-        filename = session["name"] + ".robo"
+        filename = session["filename"]
         filepath = os.path.join(path, filename)
 
         if not os.path.exists(path):
@@ -184,7 +185,7 @@ class TelemetryServer:
         self.path = path
 
         sessions = load_telemetry_directory(path)
-        self.sessions = sorted(sessions, key=lambda k: k["name"])
+        self.sessions = sorted(sessions, key=lambda k: k["filename"])
         for i, session in enumerate(self.sessions):
             self.sessions[i]["__id"] = i
 
@@ -203,7 +204,7 @@ class TelemetryServer:
         return id
 
     def register_atom(self, session_id, atom):
-        self.sessions[session_id]["atoms"].append(atom)
+        self.sessions[session_id]["_atoms"].append(atom)
         for future in self.sessions[session_id].pop(".futures", set()):
             future.set_result([])
 
@@ -243,9 +244,9 @@ if __name__ == "__main__":
             (r"/more",                      SessionListMoreHandler, dict(server=server)),
 
             # /session/0                        non-blocking, returns full page, atom_id = -1.... more=true/false
-            # /session/0/image/0                non-blocking, returns image
+            # /session/0/atom/0/image/image_name   non-blocking, returns image
             (r"/session/(?P<session_id>\w+)", SessionHandler,     dict(server=server)),
-            (r"/session/(?P<session_id>\w+)/image/(?P<atom_id>\w+)", ImageHandler, dict(server=server)),
+            (r"/session/(?P<session_id>\w+)/atom/(?P<atom_id>\w+)/image/(?P<image_name>\w+)", ImageHandler, dict(server=server)),
 
             # /live                 non-blocking, return full page of current session if exists
             # /live/more?session_id=[session_id]&atom_id=[atom_id]

@@ -1,7 +1,7 @@
-<h2> Session {{ session["description"] }} </h2>
+<h2> Session {{ session["_summary"] }} </h2>
 
-{% for k, v in sorted(session.iteritems()) %}
-  {% if k.startswith("_") or k in ["description", "atoms", "start_time"] %}
+{% for k, v in session.iteritems() %}
+  {% if k.startswith("_") %}
     {% continue %}
   {% end %}
   {{ k }}: <pre>{{ v }}</pre><br>

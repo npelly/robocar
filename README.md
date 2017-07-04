@@ -11,8 +11,8 @@ drive.py
 - Simulates autonomous driving based on archived telemetry
 
 Basic Usage:
-- python telemetryserver.py   # on laptop/workstation, now browse http://localhost:7007
-- python drive.py config.ini  # on vehicle
+- python telemetryserver.py  # on laptop/workstation, now browse http://localhost:7007
+- python drive.py config.ini --telemetry SERVER
 
 For advanced usage check command line options on drive.py
 

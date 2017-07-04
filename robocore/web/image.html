@@ -1,0 +1,9 @@
+<div class="image">
+  {{ image_name }} {{ str(image) }}<br>
+
+  <img
+    src="/session/{{ session["__id"] }}/atom/{{ atom_id }}/image/{{ image_name }}"
+    onclick="imageClick(this)"
+    style="cursor:pointer;"
+    />
+</div>

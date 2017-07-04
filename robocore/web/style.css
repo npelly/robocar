@@ -1,9 +1,12 @@
 body {
   font-family: monospace, serif;
 }
-img.camera {
-  float: left;
-  padding: 0px 0px 0px 0px;
+img {
+  padding: 1px 1px 1px 1px;
+}
+div.image {
+  font-size: 60%;
+  float: left
 }
 div.spacer {
   clear: both;
